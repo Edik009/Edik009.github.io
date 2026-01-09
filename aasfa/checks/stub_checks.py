@@ -290,3 +290,16 @@ check_debug_certificates = create_stub_check("Debug Certificates", "HIGH")
 check_signing_key_reuse = create_stub_check("Signing Key Reuse", "HIGH")
 check_dev_provisioning_profiles = create_stub_check("Dev Provisioning Profiles", "HIGH")
 check_undocumented_oem_vector = create_stub_check("Undocumented OEM Vector", "MEDIUM")
+
+
+def __getattr__(name: str):
+    """Fallback for any missing check_* function.
+
+    This allows adding new vectors without having to manually create hundreds of
+    individual stub functions.
+    """
+
+    if name.startswith("check_"):
+        return create_stub_check(name, "INFO")
+
+    raise AttributeError(name)

@@ -1,22 +1,25 @@
-"""
-Scanner Engine - главный движок сканирования
-"""
-import signal
+"""Scanner Engine - главный движок сканирования."""
+
+from __future__ import annotations
+
 import importlib
-from typing import Dict, Any, Optional
+import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .vector_registry import VectorRegistry, Vector
+from typing import Any, Dict
+
 from .logical_analyzer import LogicalAnalyzer
 from .result_aggregator import ResultAggregator, ScanResult
+from .vector_registry import Vector, VectorRegistry
 from ..connectors.adb_connector import ADBConnector
+from ..output.formatter import OutputFormatter
+from ..output.progress_bar import ProgressBar
 from ..utils.config import ScanConfig
 from ..utils.logger import get_logger
-from ..output.progress_bar import ProgressBar
 
 
 class ScannerEngine:
     """Главный движок сканирования"""
-    
+
     def __init__(self, config: ScanConfig):
         self.config = config
         self.logger = get_logger()
@@ -25,15 +28,15 @@ class ScannerEngine:
         self.aggregator = ResultAggregator()
         self.progress_bar = ProgressBar()
         self.shutdown_requested = False
-        
+
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-    
+
     def _signal_handler(self, signum, frame):
         """Обработчик сигналов для graceful shutdown"""
         self.logger.warning("\n[!] Shutdown requested, finishing current checks...")
         self.shutdown_requested = True
-    
+
     def _get_device_info(self) -> Dict[str, Any]:
         """Получение информации об устройстве"""
         try:
@@ -43,9 +46,9 @@ class ScannerEngine:
                 connector.disconnect()
                 return info
         except Exception as e:
-            self.logger.error(f"Failed to get device info: {e}")
+            self.logger.debug(f"Failed to get device info: {e}")
         return {}
-    
+
     def _execute_check(self, vector: Vector) -> ScanResult:
         """Выполнение одной проверки"""
         try:
@@ -56,31 +59,31 @@ class ScannerEngine:
                     vector.name,
                     False,
                     "Check function not implemented",
-                    "INFO"
+                    "INFO",
                 )
-            
+
             result = check_module(
                 self.config.target_ip,
                 self.config.adb_port,
-                self.config.timeout
+                self.config.timeout,
             )
-            
-            vulnerable = result.get("vulnerable", False)
-            details = result.get("details", "No details")
-            severity = result.get("severity", "INFO")
-            
+
+            vulnerable = bool(result.get("vulnerable", False))
+            details = str(result.get("details", "No details"))
+            severity = str(result.get("severity", "INFO"))
+
             return ScanResult(vector.id, vector.name, vulnerable, details, severity)
-        
+
         except Exception as e:
-            self.logger.error(f"Error executing {vector.name}: {e}")
+            self.logger.debug(f"Error executing {vector.name}: {e}")
             return ScanResult(
                 vector.id,
                 vector.name,
                 False,
                 f"Error: {str(e)}",
-                "INFO"
+                "INFO",
             )
-    
+
     def _load_check_module(self, check_function: str):
         """Динамическая загрузка функции проверки"""
         try:
@@ -95,7 +98,7 @@ class ScannerEngine:
                 "check_https_without_hsts": ("aasfa.checks.network_checks", "check_https_without_hsts"),
                 "check_ftp_anonymous": ("aasfa.checks.network_checks", "check_ftp_anonymous"),
                 "check_mqtt_exposure": ("aasfa.checks.network_checks", "check_mqtt_exposure"),
-                "check_adb_over_tcp_network": ("aasfa.checks.adb_checks", "check_adb_over_tcp"),
+                "check_adb_over_tcp_network": ("aasfa.checks.network_checks", "check_adb_over_tcp_network"),
                 "check_debuggable_build": ("aasfa.checks.adb_checks", "check_debuggable_build"),
                 "check_ro_secure_misconfig": ("aasfa.checks.adb_checks", "check_ro_secure_misconfig"),
                 "check_ro_adb_secure": ("aasfa.checks.adb_checks", "check_ro_adb_secure"),
@@ -115,98 +118,109 @@ class ScannerEngine:
                 "check_verified_boot": ("aasfa.checks.crypto_checks", "check_verified_boot"),
                 "check_fastboot_unlock": ("aasfa.checks.firmware_checks", "check_bootloader_unlock"),
             }
-            
+
             if check_function in module_map:
                 module_name, func_name = module_map[check_function]
                 module = importlib.import_module(module_name)
                 return getattr(module, func_name)
-            
-            # Попытка загрузить из stub_checks
-            try:
-                stub_module = importlib.import_module("aasfa.checks.stub_checks")
-                if hasattr(stub_module, check_function):
-                    return getattr(stub_module, check_function)
-            except Exception:
-                pass
-            
+
+            stub_module = importlib.import_module("aasfa.checks.stub_checks")
+            if hasattr(stub_module, check_function):
+                return getattr(stub_module, check_function)
+
             return None
-        
+
         except Exception as e:
             self.logger.debug(f"Failed to load {check_function}: {e}")
             return None
-    
+
+    def _dependency_satisfied(self, vector: Vector, result: ScanResult) -> bool:
+        """Whether this vector satisfied dependency checks for dependent vectors."""
+
+        if vector.id == 6:
+            return bool(result.vulnerable)
+
+        return True
+
+    def _format_live_line(self, vector: Vector, result: ScanResult) -> str:
+        if result.details.lower().startswith("skipped"):
+            return OutputFormatter.format_result_line(vector.id, vector.name, status='*')
+
+        if result.details.lower().startswith("error"):
+            return OutputFormatter.format_result_line(vector.id, vector.name, status='!')
+
+        if result.vulnerable:
+            status = '+' if result.severity != 'INFO' else '!'
+            return OutputFormatter.format_result_line(vector.id, vector.name, status=status, severity=result.severity)
+
+        if "stub" in result.details.lower() or "not yet implemented" in result.details.lower():
+            return OutputFormatter.format_result_line(vector.id, vector.name, status='*')
+
+        return OutputFormatter.format_result_line(vector.id, vector.name, status='-')
+
     def scan(self) -> ResultAggregator:
         """Запуск сканирования"""
-        self.logger.info(f"[*] Starting AASFA Scanner v1.0")
-        self.logger.info(f"[*] Target: {self.config.target_ip}")
-        self.logger.info(f"[*] Mode: {self.config.mode}")
-        self.logger.info(f"[*] Threads: {self.config.threads}")
-        
-        device_info = self._get_device_info()
-        if device_info:
-            self.aggregator.add_device_info(device_info)
-            android_version = device_info.get('android_version', 'Unknown')
-            device_model = device_info.get('device_model', 'Unknown')
-            self.logger.info(f"[*] Android version: {android_version}")
-            self.logger.info(f"[*] Device: {device_model}")
-        
+
         vectors_to_scan = self.registry.filter_vectors(self.config)
         sorted_vectors = self.analyzer.get_execution_order(vectors_to_scan)
-        
         total_vectors = len(sorted_vectors)
-        self.logger.info(f"[*] Total checks: {total_vectors}")
-        self.logger.info("[*] Scanning...")
-        
+
+        print(OutputFormatter.format_scan_context(self.config.target_ip, self.config.mode, total_vectors), end="")
+
+        if not self.config.remote_only and any(v.requires_adb for v in vectors_to_scan):
+            device_info = self._get_device_info()
+            if device_info:
+                self.aggregator.add_device_info(device_info)
+
         self.progress_bar.start(total_vectors)
-        
+
         with ThreadPoolExecutor(max_workers=self.config.threads) as executor:
             pending = sorted_vectors.copy()
             completed_count = 0
-            
+
             while pending and not self.shutdown_requested:
                 ready_vectors = self.analyzer.get_next_vectors(pending)
-                
+
                 if not ready_vectors:
-                    break
-                
-                batch_size = min(len(ready_vectors), self.config.threads * 2)
-                batch = ready_vectors[:batch_size]
-                
-                futures = {
-                    executor.submit(self._execute_check, vector): vector
-                    for vector in batch
-                }
-                
-                for future in as_completed(futures):
-                    vector = futures[future]
-                    
-                    try:
-                        result = future.result(timeout=self.config.timeout)
-                        self.aggregator.add_result(result)
-                        self.analyzer.mark_completed(vector.id, not result.vulnerable or result.severity == "INFO")
-                        
-                        completed_count += 1
-                        self.progress_bar.update(completed_count)
-                        
-                        if result.vulnerable:
-                            severity_symbol = {
-                                "CRITICAL": "[!]",
-                                "HIGH": "[+]",
-                                "MEDIUM": "[*]",
-                                "LOW": "[-]",
-                            }.get(result.severity, "[*]")
-                            
-                            self.logger.info(f"{severity_symbol} VECTOR_{vector.id:03d}: {vector.name} [{result.severity}]")
-                    
-                    except Exception as e:
-                        self.logger.error(f"Error processing {vector.name}: {e}")
+                    for vector in pending[:]:
+                        skipped = ScanResult(
+                            vector.id,
+                            vector.name,
+                            False,
+                            f"Skipped: unmet dependencies {vector.depends_on}",
+                            "INFO",
+                        )
+                        self.aggregator.add_result(skipped)
                         self.analyzer.mark_completed(vector.id, False)
                         completed_count += 1
-                        self.progress_bar.update(completed_count)
-                    
-                    pending.remove(vector)
-        
+                        self.progress_bar.current = completed_count
+                        self.progress_bar.write_line(self._format_live_line(vector, skipped))
+                        pending.remove(vector)
+                    break
+
+                batch_size = min(len(ready_vectors), self.config.threads * 2)
+                batch = ready_vectors[:batch_size]
+
+                futures = {executor.submit(self._execute_check, vector): vector for vector in batch}
+
+                for future in as_completed(futures):
+                    vector = futures[future]
+
+                    try:
+                        result = future.result(timeout=self.config.timeout)
+                    except Exception as e:
+                        result = ScanResult(vector.id, vector.name, False, f"Error: {e}", "INFO")
+
+                    self.aggregator.add_result(result)
+                    self.analyzer.mark_completed(vector.id, self._dependency_satisfied(vector, result))
+
+                    completed_count += 1
+                    self.progress_bar.current = completed_count
+                    self.progress_bar.write_line(self._format_live_line(vector, result))
+
+                    if vector in pending:
+                        pending.remove(vector)
+
         self.progress_bar.finish()
         self.aggregator.finish()
-        
         return self.aggregator

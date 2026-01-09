@@ -8,16 +8,20 @@ from typing import Optional
 @dataclass
 class ScanConfig:
     """Конфигурация сканирования"""
+
     target_ip: str
     adb_port: int = 5555
     mode: str = "full"  # fast, full, deep
     output_file: Optional[str] = None
     verbose: bool = False
+
     no_network: bool = False
     adb_only: bool = False
+    remote_only: bool = False
+
     timeout: int = 30
     threads: int = 10
-    
+
     def validate(self) -> bool:
         """Валидация конфигурации"""
         if not self.target_ip:
@@ -27,6 +31,8 @@ class ScanConfig:
         if self.threads < 1 or self.threads > 50:
             return False
         if self.timeout < 1:
+            return False
+        if self.remote_only and (self.adb_only or self.no_network):
             return False
         return True
 

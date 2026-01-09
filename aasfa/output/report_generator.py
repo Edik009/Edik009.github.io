@@ -13,12 +13,13 @@ class ReportGenerator:
     @staticmethod
     def generate_text_report(aggregator: ResultAggregator, output_file: str):
         """Генерация текстового отчета"""
-        from .formatter import OutputFormatter
+        from .formatter import ASSESSMENT_ONLY_DISCLAIMER
         
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write("="*70 + "\n")
             f.write("AASFA Scanner Report\n")
-            f.write("="*70 + "\n\n")
+            f.write("="*70 + "\n")
+            f.write(f"{ASSESSMENT_ONLY_DISCLAIMER}\n\n")
             
             summary = aggregator.get_summary()
             f.write(f"Scan Date: {summary['start_time']}\n")

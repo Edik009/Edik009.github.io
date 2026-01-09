@@ -1,17 +1,23 @@
-"""
-Vector Registry - реестр всех 300 векторов проверки
-"""
-from typing import Dict, List, Any, Optional
+"""Vector Registry - реестр всех векторов проверки."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
-from ..vectors.network_level import get_network_vectors
+from typing import Any, Dict, List, Optional
+
+from ..vectors.ai_ml_modern import get_ai_ml_vectors
 from ..vectors.android_os_logic import get_android_os_vectors
 from ..vectors.application_layer import get_application_vectors
+from ..vectors.firmware_os_lowlevel import get_firmware_os_vectors
+from ..vectors.network_level import get_network_vectors
+from ..vectors.network_services import get_network_services_vectors
 from ..vectors.supply_chain_exotic import get_supply_chain_vectors
 
 
 @dataclass
 class Vector:
     """Вектор проверки"""
+
     id: int
     category: str
     name: str
@@ -22,7 +28,7 @@ class Vector:
     priority: int
     depends_on: List[int]
     tags: List[str]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Конвертация в словарь"""
         return {
@@ -41,51 +47,60 @@ class Vector:
 
 class VectorRegistry:
     """Реестр всех векторов проверки"""
-    
+
     def __init__(self):
         self.vectors: Dict[int, Vector] = {}
         self._load_all_vectors()
-    
+
     def _load_all_vectors(self):
         """Загрузка всех векторов"""
-        all_vectors = {}
-        
+        all_vectors: Dict[int, Dict[str, Any]] = {}
+
         all_vectors.update(get_network_vectors())
         all_vectors.update(get_android_os_vectors())
         all_vectors.update(get_application_vectors())
         all_vectors.update(get_supply_chain_vectors())
-        
+        all_vectors.update(get_network_services_vectors())
+        all_vectors.update(get_firmware_os_vectors())
+        all_vectors.update(get_ai_ml_vectors())
+
+        seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
+            name = vector_data.get("name", "")
+            if name in seen_names:
+                vector_data = dict(vector_data)
+                vector_data["name"] = f"{name} (#{vector_id})"
+            seen_names.add(vector_data.get("name", ""))
             self.vectors[vector_id] = Vector(**vector_data)
-    
+
     def get_vector(self, vector_id: int) -> Optional[Vector]:
         """Получение вектора по ID"""
         return self.vectors.get(vector_id)
-    
+
     def get_all_vectors(self) -> List[Vector]:
         """Получение всех векторов"""
         return list(self.vectors.values())
-    
+
     def get_vectors_by_category(self, category: str) -> List[Vector]:
         """Получение векторов по категории"""
         return [v for v in self.vectors.values() if v.category == category]
-    
+
     def get_vectors_by_priority(self, priority: int) -> List[Vector]:
         """Получение векторов по приоритету"""
         return [v for v in self.vectors.values() if v.priority == priority]
-    
+
     def get_vectors_requiring_adb(self) -> List[Vector]:
         """Получение векторов, требующих ADB"""
         return [v for v in self.vectors.values() if v.requires_adb]
-    
+
     def get_vectors_requiring_network(self) -> List[Vector]:
         """Получение векторов, требующих сеть"""
         return [v for v in self.vectors.values() if v.requires_network]
-    
+
     def get_dependent_vectors(self, vector_id: int) -> List[Vector]:
         """Получение векторов, зависящих от данного"""
         return [v for v in self.vectors.values() if vector_id in v.depends_on]
-    
+
     def get_vectors_by_tags(self, tags: List[str]) -> List[Vector]:
         """Получение векторов по тегам"""
         result = []
@@ -93,24 +108,28 @@ class VectorRegistry:
             if any(tag in vector.tags for tag in tags):
                 result.append(vector)
         return result
-    
+
     def filter_vectors(self, config: Any) -> List[Vector]:
         """Фильтрация векторов по конфигурации"""
         vectors = self.get_all_vectors()
-        
-        if config.no_network:
-            vectors = [v for v in vectors if not v.requires_network]
-        
-        if config.adb_only:
-            vectors = [v for v in vectors if v.requires_adb]
-        
-        if config.mode == "fast":
+
+        if getattr(config, "remote_only", False):
+            vectors = [v for v in vectors if v.requires_network and not v.requires_adb]
+        else:
+            if getattr(config, "no_network", False):
+                vectors = [v for v in vectors if not v.requires_network]
+
+            if getattr(config, "adb_only", False):
+                vectors = [v for v in vectors if v.requires_adb]
+
+        mode = getattr(config, "mode", "full")
+        if mode == "fast":
             vectors = [v for v in vectors if v.priority <= 2]
-        elif config.mode == "full":
+        elif mode == "full":
             vectors = [v for v in vectors if v.priority <= 3]
-        
+
         return vectors
-    
+
     def get_statistics(self) -> Dict[str, int]:
         """Статистика по векторам"""
         return {
@@ -119,6 +138,9 @@ class VectorRegistry:
             "category_B": len(self.get_vectors_by_category("B")),
             "category_C": len(self.get_vectors_by_category("C")),
             "category_D": len(self.get_vectors_by_category("D")),
+            "category_E": len(self.get_vectors_by_category("E")),
+            "category_F": len(self.get_vectors_by_category("F")),
+            "category_G": len(self.get_vectors_by_category("G")),
             "requires_adb": len(self.get_vectors_requiring_adb()),
             "requires_network": len(self.get_vectors_requiring_network()),
         }

@@ -2,20 +2,23 @@
 
 ## Overview
 
-AASFA Scanner implements **300 security check vectors** divided into 4 categories:
+AASFA Scanner implements **900 security check vectors** divided into 7 categories:
 
 - **Category A**: Network & Remote Access (Vectors 1-40)
 - **Category B**: Android OS Logic (Vectors 41-100)  
 - **Category C**: Application Layer (Vectors 101-170)
 - **Category D**: Supply Chain / Exotic (Vectors 171-300)
+- **Category E**: Network Services (Vectors 301-380)
+- **Category F**: Firmware/OS/Low-level (Vectors 381-520)
+- **Category G**: AI/ML/Modern (Vectors 521-900)
 
 ## Statistics
 
-- **Total Vectors**: 300
+- **Total Vectors**: 900
 - **Implemented Checks**: 30+ fully implemented
-- **Stub Checks**: 270+ (framework ready for implementation)
-- **Network-based**: 40 vectors
-- **ADB-based**: 260 vectors
+- **Stub Checks**: 870+ (framework ready for implementation)
+- **Network-based**: 120 vectors
+- **ADB-based**: 780 vectors
 
 ## Implementation Status
 

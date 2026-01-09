@@ -5,7 +5,6 @@ Main entry point
 """
 import sys
 import argparse
-from pathlib import Path
 
 from aasfa.utils.config import ScanConfig
 from aasfa.utils.logger import init_logger
@@ -71,6 +70,12 @@ Examples:
         action='store_true',
         help='Only ADB-based checks'
     )
+
+    parser.add_argument(
+        '--remote-only',
+        action='store_true',
+        help='Only remote/network checks (NO USB REQUIRED)'
+    )
     
     parser.add_argument(
         '--timeout',
@@ -106,6 +111,10 @@ def validate_arguments(args) -> bool:
     if args.timeout < 1:
         print(f"[!] Error: Timeout must be at least 1 second")
         return False
+
+    if args.remote_only and (args.adb_only or args.no_network):
+        print("[!] Error: --remote-only cannot be combined with --adb-only or --no-network")
+        return False
     
     return True
 
@@ -125,6 +134,7 @@ def main():
         verbose=args.verbose,
         no_network=args.no_network,
         adb_only=args.adb_only,
+        remote_only=args.remote_only,
         timeout=args.timeout,
         threads=args.threads
     )
@@ -136,7 +146,7 @@ def main():
     log_file = "aasfa_scan.log" if args.verbose else None
     logger = init_logger(args.verbose, log_file)
     
-    print(OutputFormatter.format_header(args.target))
+    print(OutputFormatter.format_header())
     
     try:
         engine = ScannerEngine(config)
