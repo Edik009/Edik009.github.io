@@ -1,11 +1,12 @@
 """Output formatter for console output.
 
-v2.0 formatting requirements:
+v3.0 formatting requirements (MSF-style):
 - No timestamps in console
-- ASCII header
-- Unified result symbols: [+] found, [-] not found, [*] info, [!] warning
+- ASCII header with legal disclaimers
+- Unified result symbols: [+] confirmed, [*] info, [!] warning
 - Summary with Risk Score
 - Mandatory assessment-only disclaimer
+- Only show CONFIRMED results
 """
 
 from __future__ import annotations
@@ -18,7 +19,8 @@ from ..utils.config import COLORS
 
 
 ASSESSMENT_ONLY_DISCLAIMER = (
-    "Scanner performs feasibility assessment only and does not exploit vulnerabilities."
+    "Scanner performs feasibility assessment only and does not exploit vulnerabilities.\n"
+    "Remote analysis only, no USB/ADB required."
 )
 
 
@@ -37,15 +39,16 @@ class OutputFormatter:
 
     @staticmethod
     def format_header() -> str:
-        """Форматирование заголовка"""
+        """Форматирование заголовка - MSF style"""
         return (
             f"{_c('BOLD')}"
-            "╔══════════════════════════════════════════════════════════════╗\n"
-            "║         AASFA Scanner - Android Attack Surface Scanner       ║\n"
-            "║              Pre-Attack Assessment Tool v2.0                 ║\n"
-            "║        Scanner performs feasibility assessment only          ║\n"
-            "║         and does not exploit vulnerabilities.                ║\n"
-            f"╚══════════════════════════════════════════════════════════════╝{_c('RESET')}\n"
+            "╔═══════════════════════════════════════════════════════════════╗\n"
+            "║          AASFA Scanner v3.0 - Android Attack Surface          ║\n"
+            "║              Pre-Attack Feasibility Assessment                ║\n"
+            "║                                                               ║\n"
+            "║ Scanner performs feasibility assessment only and does not    ║\n"
+            "║ exploit vulnerabilities. Remote analysis only, no USB/ADB.   ║\n"
+            f"╚═══════════════════════════════════════════════════════════════╝{_c('RESET')}\n"
         )
 
     @staticmethod
@@ -53,15 +56,14 @@ class OutputFormatter:
         return (
             f"\n[*] Target: {target}\n"
             f"[*] Mode: {mode}\n"
-            f"[*] Total checks: {total_checks}\n"
-            "[*] Starting scan...\n"
+            f"[*] Starting analysis...\n"
         )
 
     @staticmethod
     def format_result_line(vector_id: int, vector_name: str, *, status: str, severity: str | None = None) -> str:
-        """Format a single result line.
+        """Format a single result line - MSF style
 
-        status: one of '+', '-', '*', '!'
+        status: one of '+', '*', '!' (no '-' for not found)
         """
         symbol = f"[{status}]"
         if severity:
@@ -70,7 +72,7 @@ class OutputFormatter:
 
     @staticmethod
     def format_summary(aggregator: ResultAggregator) -> str:
-        """Форматирование итоговой сводки"""
+        """Форматирование итоговой сводки - MSF style"""
         summary = aggregator.get_summary()
         vulns = sorted(aggregator.get_vulnerabilities(), key=lambda r: (r.severity, r.vector_id))
 
@@ -88,16 +90,20 @@ class OutputFormatter:
         output += "=" * 70 + "\n\n"
 
         output += f"Total checks performed: {summary['total_checks']}\n"
-        output += f"Scan duration: {summary['duration_seconds']:.2f} seconds\n"
+        output += f"Scan duration: {summary['duration_seconds']:.2f} seconds\n\n"
+
         output += f"Vulnerabilities found: {summary['vulnerabilities_found']}\n\n"
 
         if vulns:
             for v in vulns:
-                output += OutputFormatter.format_result_line(v.vector_id, v.vector_name, status='+', severity=v.severity) + "\n"
+                output += f"[*] VECTOR_{v.vector_id:03d}: {v.vector_name} [{v.severity}]\n"
+                output += f"    Evidence:\n"
+                for evidence in v.details.split("; "):
+                    output += f"    - {evidence}\n"
+                output += "\n"
         else:
-            output += "[-] No vulnerabilities found\n"
+            output += "[-] No vulnerabilities found\n\n"
 
-        output += "\n"
         output += f"Risk Score: {risk_score}/100 [{risk_level}]\n\n"
         output += ASSESSMENT_ONLY_DISCLAIMER + "\n"
         output += "=" * 70 + "\n"
@@ -115,7 +121,9 @@ class OutputFormatter:
 
         for vuln in vulnerabilities:
             output += f"[{vuln.severity}] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name}\n"
-            output += f"Details: {vuln.details}\n"
-            output += f"Timestamp: {vuln.timestamp}\n\n"
+            output += f"Evidence:\n"
+            for evidence in vuln.details.split("; "):
+                output += f"    - {evidence}\n"
+            output += "\n"
 
         return output

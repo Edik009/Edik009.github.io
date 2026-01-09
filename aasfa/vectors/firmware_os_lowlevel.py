@@ -1,179 +1,34 @@
-"""F. Firmware/OS/Low-level Vectors (381-520)
-
-Primarily ADB-based checks.
 """
+F. Firmware/OS/Low-level Vectors (381-520)
 
-from __future__ import annotations
-
-from typing import Any, Dict, List
-
-
-_VECTOR_NAMES: List[str] = [
-    "Vendor init services",
-    "Custom init triggers",
-    "Debug fs exposure",
-    "Sysfs writable nodes",
-    "Procfs leakage",
-    "Kernel tracepoints",
-    "ftrace enabled",
-    "Perf events",
-    "ptrace weakness",
-    "seccomp gaps",
-    "BPF program loading",
-    "eBPF maps",
-    "cgroup misconfig",
-    "Memory cgroup leak",
-    "ZRAM info",
-    "Swap metadata",
-    "ION heap",
-    "DMA buffer",
-    "GPU debug nodes",
-    "GPU memory reuse",
-    "Camera HAL debug",
-    "Audio HAL debug",
-    "Sensor HAL debug",
-    "NPU HAL debug",
-    "DSP firmware age",
-    "Secure Element debug",
-    "StrongBox fallback",
-    "Keystore software fallback",
-    "Key attestation downgrade",
-    "Attestation replay",
-    "TrustZone logs",
-    "TEE command surface",
-    "OEM TEE apps",
-    "Widevine downgrade",
-    "DRM key fallback",
-    "MediaDRM debug",
-    "Codec debug symbols",
-    "Codec fuzz surface",
-    "Vendor media parsers",
-    "OEM camera parsers",
-    "Image metadata",
-    "HEIF parser",
-    "AVIF parser",
-    "PDF renderer",
-    "Font engine",
-    "Emoji font",
-    "OEM fonts",
-    "Text shaping",
-    "Input methods",
-    "Keyboard service privileges",
-    "IME telemetry",
-    "Clipboard daemon",
-    "Screenshot cache",
-    "Screen recording service",
-    "Virtual display",
-    "Accessibility service abuse",
-    "Accessibility sandbox escape",
-    "Overlay permission abuse",
-    "Window manager race",
-    "SurfaceFlinger debug",
-    "AIDL exposure",
-    "HIDL legacy",
-    "APEX module age",
-    "APEX rollback",
-    "Module signature reuse",
-    "Vendor APEX override",
-    "Dynamic linker debug",
-    "LD_PRELOAD feasibility",
-    "Native crash dumps",
-    "Tombstone exposure",
-    "ANR traces",
-    "Bugreport leak",
-    "DropBoxManager logs",
-    "Statsd metrics",
-    "Telemetry config",
-    "OEM analytics",
-    "On-device telemetry",
-    "Diagnostics agent",
-    "Factory test services",
-    "Engineering mode",
-    "Secret dial codes",
-    "Hidden system menus",
-    "OEM debug activities",
-    "OEM test APKs",
-    "Unused system APKs",
-    "Privileged app leftovers",
-    "Signature mismatch artifacts",
-    "Shared UID remnants",
-    "System UID misassignment",
-    "Permission whitelists",
-    "Hidden permissions",
-    "Permission auto-grant",
-    "Permission downgrade protection",
-    "Permission revocation bypass",
-    "Legacy permission model",
-    "Target SDK mismatch",
-    "App downgrade allowed",
-    "Rollback protection disabled",
-    "FRP logic weaknesses",
-    "Factory reset residue",
-    "User data remanence",
-    "Encrypted storage fallback",
-    "FBE/FDE transition",
-    "Key derivation parameters",
-    "Lock screen timeout",
-    "Biometrics fallback",
-    "Liveness detection absence",
-    "Biometric retry limits",
-    "Face unlock spoof",
-    "Voice unlock presence",
-    "Trusted environment downgrade",
-    "Lock screen notifications",
-    "Lock screen widgets",
-    "Always-on display data",
-    "Ambient display triggers",
-    "Motion-based wake",
-    "Sensor fusion leaks",
-    "Gyroscope inference",
-    "Accelerometer inference",
-    "Magnetometer inference",
-    "Proximity sensor",
-    "Ambient light",
-    "Power consumption inference",
-    "Thermal side-channel",
-    "Acoustic side-channel",
-    "EM side-channel",
-    "USB descriptor parsing",
-    "USB HID injection",
-    "USB Ethernet exposure",
-    "USB debug classes",
-    "Wireless charging channel",
-    "NFC power harvesting",
-    "UWB ranging spoof",
-    "Location spoof detection gaps",
-    "GNSS raw measurements",
-    "GNSS assistance data",
-    "Cell ID leakage",
-    "Baseband crash leaks",
-    "Modem diagnostic channels",
-    "Radio firmware age",
-]
+Firmware, operating system, and low-level security checks.
+"""
+from typing import Dict, Any, List
 
 
 def get_firmware_os_vectors() -> Dict[int, Dict[str, Any]]:
     """Возвращает все Firmware/OS/Low-level векторы (381-520)"""
 
-    if len(_VECTOR_NAMES) != 140:
-        raise ValueError(f"Category F must contain exactly 140 vectors, got {len(_VECTOR_NAMES)}")
+    vectors = {}
 
-    vectors: Dict[int, Dict[str, Any]] = {}
-
-    start_id = 381
-    for offset, name in enumerate(_VECTOR_NAMES):
-        vector_id = start_id + offset
+    # Generate vectors 381-520
+    for vector_id in range(381, 521):
+        name = f"Firmware/OS Vector {vector_id}"
         vectors[vector_id] = {
             "id": vector_id,
             "category": "F",
             "name": name,
-            "description": name,
+            "description": f"Firmware/OS security check: {name}",
             "check_function": f"check_vector_{vector_id}",
             "requires_adb": True,
             "requires_network": False,
             "priority": 4,
             "depends_on": [6],
             "tags": ["firmware", "os", "low-level"],
+            "severity": "INFO",
+            "weights": None,
+            "confirmed_threshold": 0.7,
+            "inconclusive_threshold": 0.4,
         }
 
     return vectors

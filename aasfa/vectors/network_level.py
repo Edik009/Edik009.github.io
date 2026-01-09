@@ -64,6 +64,10 @@ def get_network_vectors() -> Dict[int, Dict[str, Any]]:
             "priority": 1,
             "depends_on": [],
             "tags": ["network", "remote"],
+            "severity": "INFO",
+            "weights": None,
+            "confirmed_threshold": 0.7,
+            "inconclusive_threshold": 0.4,
         }
-    
+
     return vectors
