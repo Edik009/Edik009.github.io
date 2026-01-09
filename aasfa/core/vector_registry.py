@@ -6,11 +6,14 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..vectors.ai_ml_modern import get_ai_ml_vectors
+from ..vectors.ai_system_intelligence import get_ai_system_vectors
 from ..vectors.android_os_logic import get_android_os_vectors
 from ..vectors.application_layer import get_application_vectors
+from ..vectors.behavioral_correlation import get_behavioral_vectors
 from ..vectors.firmware_os_lowlevel import get_firmware_os_vectors
 from ..vectors.network_level import get_network_vectors
 from ..vectors.network_services import get_network_services_vectors
+from ..vectors.oem_supply_chain import get_oem_supply_vectors
 from ..vectors.supply_chain_exotic import get_supply_chain_vectors
 
 
@@ -28,6 +31,10 @@ class Vector:
     priority: int
     depends_on: List[int]
     tags: List[str]
+    severity: str = "INFO"
+    weights: Dict[str, float] = None
+    confirmed_threshold: float = 0.7
+    inconclusive_threshold: float = 0.4
 
     def to_dict(self) -> Dict[str, Any]:
         """Конвертация в словарь"""
@@ -42,6 +49,10 @@ class Vector:
             "priority": self.priority,
             "depends_on": self.depends_on,
             "tags": self.tags,
+            "severity": self.severity,
+            "weights": self.weights,
+            "confirmed_threshold": self.confirmed_threshold,
+            "inconclusive_threshold": self.inconclusive_threshold,
         }
 
 
@@ -63,6 +74,9 @@ class VectorRegistry:
         all_vectors.update(get_network_services_vectors())
         all_vectors.update(get_firmware_os_vectors())
         all_vectors.update(get_ai_ml_vectors())
+        all_vectors.update(get_behavioral_vectors())
+        all_vectors.update(get_oem_supply_vectors())
+        all_vectors.update(get_ai_system_vectors())
 
         seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
@@ -141,6 +155,9 @@ class VectorRegistry:
             "category_E": len(self.get_vectors_by_category("E")),
             "category_F": len(self.get_vectors_by_category("F")),
             "category_G": len(self.get_vectors_by_category("G")),
+            "category_H": len(self.get_vectors_by_category("H")),
+            "category_I": len(self.get_vectors_by_category("I")),
+            "category_J": len(self.get_vectors_by_category("J")),
             "requires_adb": len(self.get_vectors_requiring_adb()),
             "requires_network": len(self.get_vectors_requiring_network()),
         }

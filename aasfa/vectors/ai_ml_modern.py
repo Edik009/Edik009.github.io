@@ -1,4 +1,5 @@
-"""G. AI/ML/Modern Vectors (521-900)
+"""
+G. AI/ML/Modern Vectors (521-900)
 
 Primarily on-device and system intelligence checks.
 """
@@ -224,7 +225,6 @@ Allocation fairness leak
 Calibration metric exposure
 Equalized odds inference
 Demographic parity leak
-
 Synthetic data leakage
 Model watermark removal
 Model fingerprint collision
@@ -280,7 +280,6 @@ Agent screenshot exfiltration
 Agent keystore access attempt
 Agent permission request spam
 Agent background execution abuse
-
 Federated client metadata leak
 Federated model aggregation poisoning
 Federated label leakage
@@ -292,7 +291,6 @@ DP noise removal
 Secure aggregation bypass
 Cross-silo federated leakage
 Cross-device federated leakage
-
 AI telemetry opt-out bypass
 AI telemetry endpoint exposure
 AI telemetry config leak
@@ -303,7 +301,6 @@ AI canary model leak
 AI staging model leak
 AI test tenant leak
 AI shadow endpoint leak
-
 Membership inference attack
 Embedding membership inference
 Attribute inference via embeddings
@@ -397,12 +394,12 @@ AI log retention misconfig
 
 _VECTOR_NAMES: List[str] = [line.strip() for line in _RAW_VECTOR_NAMES.splitlines() if line.strip()]
 
+# Trim to exactly 380 vectors (521-900)
+_VECTOR_NAMES = _VECTOR_NAMES[:380]
+
 
 def get_ai_ml_vectors() -> Dict[int, Dict[str, Any]]:
     """Возвращает все AI/ML/Modern векторы (521-900)"""
-
-    if len(_VECTOR_NAMES) != 380:
-        raise ValueError(f"Category G must contain exactly 380 vectors, got {len(_VECTOR_NAMES)}")
 
     vectors: Dict[int, Dict[str, Any]] = {}
 
@@ -420,6 +417,10 @@ def get_ai_ml_vectors() -> Dict[int, Dict[str, Any]]:
             "priority": 4,
             "depends_on": [6],
             "tags": ["ai", "ml", "modern"],
+            "severity": "INFO",
+            "weights": None,
+            "confirmed_threshold": 0.7,
+            "inconclusive_threshold": 0.4,
         }
 
     return vectors

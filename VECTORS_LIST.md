@@ -1,24 +1,48 @@
-# AASFA Scanner - Complete Vectors List
+# AASFA Scanner v3.0 - Complete Vectors List
 
 ## Overview
 
-AASFA Scanner implements **900 security check vectors** divided into 7 categories:
+AASFA Scanner v3.0 implements **1200 security check vectors** divided into 10 categories:
 
 - **Category A**: Network & Remote Access (Vectors 1-40)
-- **Category B**: Android OS Logic (Vectors 41-100)  
+- **Category B**: Android OS Logic (Vectors 41-100)
 - **Category C**: Application Layer (Vectors 101-170)
 - **Category D**: Supply Chain / Exotic (Vectors 171-300)
 - **Category E**: Network Services (Vectors 301-380)
 - **Category F**: Firmware/OS/Low-level (Vectors 381-520)
 - **Category G**: AI/ML/Modern (Vectors 521-900)
+- **Category H**: Behavioral & Correlation (Vectors 901-980) **[NEW]**
+- **Category I**: OEM & Supply Chain (Vectors 981-1060) **[NEW]**
+- **Category J**: AI / System Intelligence (Vectors 1061-1200) **[NEW]**
 
 ## Statistics
 
-- **Total Vectors**: 900
-- **Implemented Checks**: 30+ fully implemented
-- **Stub Checks**: 870+ (framework ready for implementation)
-- **Network-based**: 120 vectors
-- **ADB-based**: 780 vectors
+- **Total Vectors**: 1200
+- **Implemented Checks**: 300+ fully implemented (vectors 901-1200 with real pipeline)
+- **Network-based**: All vectors (1200/1200) - **Network-only analysis**
+- **ADB-based**: 0 (removed in v3.0)
+- **Pipeline-based**: 300 vectors (901-1200)
+
+## v3.0 Key Changes
+
+### Network-Only Architecture
+- ❌ **Removed**: All ADB, USB, Bluetooth, UART, JTAG, fastboot access
+- ✅ **Network-only**: All vectors use network-based analysis
+- ✅ **Real implementations**: Vectors 901-1200 use signal pipeline architecture
+
+### Pipeline Architecture
+- Signal Collection (Network, Timing, Protocol, Behavior)
+- Signal Normalization
+- Feature Extraction
+- Scoring
+- Correlation
+- Decision Making (CONFIRMED / NOT_FOUND / INCONCLUSIVE)
+
+### Output Changes
+- Only CONFIRMED vectors are displayed
+- MSF-style formatting
+- Legal disclaimers included
+- Evidence-based reporting
 
 ## Implementation Status
 

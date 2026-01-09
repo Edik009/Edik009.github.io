@@ -10,7 +10,6 @@ from typing import Any, Dict
 from .logical_analyzer import LogicalAnalyzer
 from .result_aggregator import ResultAggregator, ScanResult
 from .vector_registry import Vector, VectorRegistry
-from ..connectors.adb_connector import ADBConnector
 from ..output.formatter import OutputFormatter
 from ..output.progress_bar import ProgressBar
 from ..utils.config import ScanConfig
@@ -36,18 +35,6 @@ class ScannerEngine:
         """Обработчик сигналов для graceful shutdown"""
         self.logger.warning("\n[!] Shutdown requested, finishing current checks...")
         self.shutdown_requested = True
-
-    def _get_device_info(self) -> Dict[str, Any]:
-        """Получение информации об устройстве"""
-        try:
-            connector = ADBConnector(self.config.target_ip, self.config.adb_port, self.config.timeout)
-            if connector.connect():
-                info = connector.get_device_info()
-                connector.disconnect()
-                return info
-        except Exception as e:
-            self.logger.debug(f"Failed to get device info: {e}")
-        return {}
 
     def _execute_check(self, vector: Vector) -> ScanResult:
         """Выполнение одной проверки"""
@@ -87,6 +74,13 @@ class ScannerEngine:
     def _load_check_module(self, check_function: str):
         """Динамическая загрузка функции проверки"""
         try:
+            # Try deep network checks first (vectors 901-1200)
+            if check_function.startswith("check_vector_"):
+                module = importlib.import_module("aasfa.checks.deep_network_checks")
+                if hasattr(module, check_function):
+                    return getattr(module, check_function)
+
+            # Original network checks
             module_map = {
                 "check_vnc_availability": ("aasfa.checks.network_checks", "check_vnc_availability"),
                 "check_rdp_availability": ("aasfa.checks.network_checks", "check_rdp_availability"),
@@ -98,25 +92,6 @@ class ScannerEngine:
                 "check_https_without_hsts": ("aasfa.checks.network_checks", "check_https_without_hsts"),
                 "check_ftp_anonymous": ("aasfa.checks.network_checks", "check_ftp_anonymous"),
                 "check_mqtt_exposure": ("aasfa.checks.network_checks", "check_mqtt_exposure"),
-                "check_adb_over_tcp_network": ("aasfa.checks.network_checks", "check_adb_over_tcp_network"),
-                "check_debuggable_build": ("aasfa.checks.adb_checks", "check_debuggable_build"),
-                "check_ro_secure_misconfig": ("aasfa.checks.adb_checks", "check_ro_secure_misconfig"),
-                "check_ro_adb_secure": ("aasfa.checks.adb_checks", "check_ro_adb_secure"),
-                "check_test_keys": ("aasfa.checks.adb_checks", "check_test_keys"),
-                "check_selinux_permissive": ("aasfa.checks.adb_checks", "check_selinux_permissive"),
-                "check_userdebug_remnants": ("aasfa.checks.adb_checks", "check_userdebug_remnants"),
-                "check_system_uid_leakage": ("aasfa.checks.adb_checks", "check_system_uid_leakage"),
-                "check_logcat_sensitive_data": ("aasfa.checks.adb_checks", "check_logcat_sensitive_data"),
-                "check_root_access": ("aasfa.checks.adb_checks", "check_root_access"),
-                "check_exported_activities": ("aasfa.checks.service_checks", "check_exported_activities"),
-                "check_exported_services": ("aasfa.checks.service_checks", "check_exported_services"),
-                "check_exported_receivers": ("aasfa.checks.service_checks", "check_exported_receivers"),
-                "check_contentprovider_exposure": ("aasfa.checks.service_checks", "check_contentprovider_exposure"),
-                "check_backup_flag_enabled": ("aasfa.checks.service_checks", "check_backup_flag_enabled"),
-                "check_intent_hijacking": ("aasfa.checks.service_checks", "check_intent_hijacking"),
-                "check_hardware_backed_key": ("aasfa.checks.crypto_checks", "check_hardware_backed_keystore"),
-                "check_verified_boot": ("aasfa.checks.crypto_checks", "check_verified_boot"),
-                "check_fastboot_unlock": ("aasfa.checks.firmware_checks", "check_bootloader_unlock"),
             }
 
             if check_function in module_map:
@@ -124,6 +99,7 @@ class ScannerEngine:
                 module = importlib.import_module(module_name)
                 return getattr(module, func_name)
 
+            # Stub checks for ADB and other checks
             stub_module = importlib.import_module("aasfa.checks.stub_checks")
             if hasattr(stub_module, check_function):
                 return getattr(stub_module, check_function)
@@ -162,15 +138,14 @@ class ScannerEngine:
         """Запуск сканирования"""
 
         vectors_to_scan = self.registry.filter_vectors(self.config)
+
+        # Skip ADB vectors - network-only analysis
+        vectors_to_scan = [v for v in vectors_to_scan if not v.requires_adb]
+
         sorted_vectors = self.analyzer.get_execution_order(vectors_to_scan)
         total_vectors = len(sorted_vectors)
 
         print(OutputFormatter.format_scan_context(self.config.target_ip, self.config.mode, total_vectors), end="")
-
-        if not self.config.remote_only and any(v.requires_adb for v in vectors_to_scan):
-            device_info = self._get_device_info()
-            if device_info:
-                self.aggregator.add_device_info(device_info)
 
         self.progress_bar.start(total_vectors)
 
@@ -211,7 +186,13 @@ class ScannerEngine:
                     except Exception as e:
                         result = ScanResult(vector.id, vector.name, False, f"Error: {e}", "INFO")
 
-                    self.aggregator.add_result(result)
+                    # Only add result if it's confirmed
+                    if result.vulnerable:
+                        self.aggregator.add_result(result)
+                    else:
+                        # Still track for progress, but don't add to final results
+                        pass
+
                     self.analyzer.mark_completed(vector.id, self._dependency_satisfied(vector, result))
 
                     completed_count += 1
