@@ -35,6 +35,7 @@ class ResultAggregator:
     
     def __init__(self):
         self.results: List[ScanResult] = []
+        self.all_checks_performed: List[ScanResult] = []
         self.start_time = datetime.now()
         self.end_time = None
         self.device_info = {}
@@ -42,6 +43,11 @@ class ResultAggregator:
     def add_result(self, result: ScanResult):
         """Добавление результата"""
         self.results.append(result)
+        self.all_checks_performed.append(result)
+    
+    def add_check_performed(self, result: ScanResult):
+        """Добавление информации о выполненной проверке (включая неуязвимые)"""
+        self.all_checks_performed.append(result)
     
     def add_device_info(self, info: Dict[str, Any]):
         """Добавление информации об устройстве"""
@@ -89,7 +95,7 @@ class ResultAggregator:
         severity_counts = self.get_severity_counts()
         
         return {
-            "total_checks": len(self.results),
+            "total_checks": len(self.all_checks_performed),
             "vulnerabilities_found": self.get_vulnerable_count(),
             "severity_breakdown": severity_counts,
             "critical": severity_counts.get("CRITICAL", 0),

@@ -102,7 +102,7 @@ class OutputFormatter:
                     output += f"    - {evidence}\n"
                 output += "\n"
         else:
-            output += "[-] No vulnerabilities found\n\n"
+            output += "No vulnerabilities found during this scan.\n\n"
 
         output += f"Risk Score: {risk_score}/100 [{risk_level}]\n\n"
         output += ASSESSMENT_ONLY_DISCLAIMER + "\n"

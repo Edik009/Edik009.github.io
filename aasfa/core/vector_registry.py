@@ -15,6 +15,7 @@ from ..vectors.network_level import get_network_vectors
 from ..vectors.network_services import get_network_services_vectors
 from ..vectors.oem_supply_chain import get_oem_supply_vectors
 from ..vectors.supply_chain_exotic import get_supply_chain_vectors
+from ..vectors.additional_vectors import get_additional_vectors
 
 
 @dataclass
@@ -77,6 +78,7 @@ class VectorRegistry:
         all_vectors.update(get_behavioral_vectors())
         all_vectors.update(get_oem_supply_vectors())
         all_vectors.update(get_ai_system_vectors())
+        all_vectors.update(get_additional_vectors())
 
         seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
