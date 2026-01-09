@@ -3,19 +3,19 @@ Progress bar for scan progress visualization
 """
 import sys
 import time
-from typing import Optional
 
 
 class ProgressBar:
     """Прогресс-бар для визуализации прогресса сканирования"""
-    
-    def __init__(self, width: int = 50):
+
+    def __init__(self, width: int = 40):
         self.width = width
         self.total = 0
         self.current = 0
         self.start_time = 0.0
         self.enabled = sys.stdout.isatty()
-    
+        self._last_render_len = 0
+
     def start(self, total: int):
         """Запуск прогресс-бара"""
         self.total = total
@@ -34,7 +34,26 @@ class ProgressBar:
         self._draw()
         if self.enabled:
             print()
-    
+
+    def write_line(self, message: str):
+        """Печать строки поверх прогресс-бара без артефактов."""
+        if not self.enabled:
+            print(message)
+            return
+
+        self._clear_line()
+        sys.stdout.write(message + "\n")
+        sys.stdout.flush()
+        self._draw()
+
+    def _clear_line(self):
+        if not self.enabled:
+            return
+
+        if self._last_render_len:
+            sys.stdout.write("\r" + (" " * self._last_render_len) + "\r")
+            sys.stdout.flush()
+
     def _draw(self):
         """Отрисовка прогресс-бара"""
         if not self.enabled:
@@ -54,7 +73,10 @@ class ProgressBar:
         else:
             eta_str = "???"
         
-        sys.stdout.write(f'\r[{bar}] {percent}% | {self.current}/{self.total} | ETA: {eta_str}')
+        line = f'[{bar}] {percent}% | {self.current}/{self.total} | ETA: {eta_str}'
+        self._last_render_len = len(line) + 1
+
+        sys.stdout.write(f'\r{line}')
         sys.stdout.flush()
     
     def _format_time(self, seconds: float) -> str:

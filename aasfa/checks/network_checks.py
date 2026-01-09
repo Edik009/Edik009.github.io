@@ -1,7 +1,7 @@
 """
 Network-level security checks
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from ..connectors.network_connector import NetworkConnector
 from ..connectors.http_connector import HTTPConnector
 from ..utils.config import DEFAULT_PORTS
@@ -42,6 +42,16 @@ def check_telnet_presence(target: str, port: int, timeout: int) -> Dict[str, Any
         if connector.scan_port(telnet_port):
             return {"vulnerable": True, "details": f"Telnet open on port {telnet_port}", "severity": "CRITICAL"}
     return {"vulnerable": False, "details": "Telnet not found"}
+
+
+def check_adb_over_tcp_network(target: str, port: int, timeout: int) -> Dict[str, Any]:
+    """Проверка ADB over TCP без использования локального adb (network-only)."""
+    connector = NetworkConnector(target, timeout)
+    if connector.scan_port(port):
+        banner = connector.get_service_banner(port)
+        details = f"ADB TCP port {port} is open" + (f": {banner}" if banner else "")
+        return {"vulnerable": True, "details": details, "severity": "CRITICAL"}
+    return {"vulnerable": False, "details": "ADB not accessible"}
 
 
 def check_upnp_exposure(target: str, port: int, timeout: int) -> Dict[str, Any]:

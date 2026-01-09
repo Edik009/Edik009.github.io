@@ -1,66 +1,79 @@
+"""Output formatter for console output.
+
+v2.0 formatting requirements:
+- No timestamps in console
+- ASCII header
+- Unified result symbols: [+] found, [-] not found, [*] info, [!] warning
+- Summary with Risk Score
+- Mandatory assessment-only disclaimer
 """
-Output formatter for Metasploit-style console output
-"""
-from typing import List, Dict, Any
+
+from __future__ import annotations
+
+import sys
+from typing import List
+
 from ..core.result_aggregator import ScanResult, ResultAggregator
 from ..utils.config import COLORS
 
 
-class OutputFormatter:
-    """Форматтер вывода в стиле Metasploit"""
-    
-    @staticmethod
-    def format_header(target: str) -> str:
-        """Форматирование заголовка"""
-        return f"""
-{COLORS['BOLD']}╔══════════════════════════════════════════════════════════════╗
-║         AASFA Scanner - Android Attack Surface Scanner       ║
-║              Pre-Attack Assessment Tool v1.0                 ║
-╚══════════════════════════════════════════════════════════════╝{COLORS['RESET']}
+ASSESSMENT_ONLY_DISCLAIMER = (
+    "Scanner performs feasibility assessment only and does not exploit vulnerabilities."
+)
 
-[*] Target: {target}
-"""
-    
+
+def _use_colors() -> bool:
+    return sys.stdout.isatty()
+
+
+def _c(key: str) -> str:
+    if not _use_colors():
+        return ""
+    return COLORS.get(key, "")
+
+
+class OutputFormatter:
+    """Форматтер вывода"""
+
     @staticmethod
-    def format_vulnerability(result: ScanResult) -> str:
-        """Форматирование уязвимости"""
-        color = COLORS.get(result.severity, COLORS['INFO'])
-        symbol = {
-            "CRITICAL": "[!]",
-            "HIGH": "[+]",
-            "MEDIUM": "[*]",
-            "LOW": "[-]",
-        }.get(result.severity, "[*]")
-        
-        return f"{color}{symbol} VECTOR_{result.vector_id:03d}: {result.vector_name} [{result.severity}]{COLORS['RESET']}\n    {result.details}"
-    
+    def format_header() -> str:
+        """Форматирование заголовка"""
+        return (
+            f"{_c('BOLD')}"
+            "╔══════════════════════════════════════════════════════════════╗\n"
+            "║         AASFA Scanner - Android Attack Surface Scanner       ║\n"
+            "║              Pre-Attack Assessment Tool v2.0                 ║\n"
+            "║        Scanner performs feasibility assessment only          ║\n"
+            "║         and does not exploit vulnerabilities.                ║\n"
+            f"╚══════════════════════════════════════════════════════════════╝{_c('RESET')}\n"
+        )
+
+    @staticmethod
+    def format_scan_context(target: str, mode: str, total_checks: int) -> str:
+        return (
+            f"\n[*] Target: {target}\n"
+            f"[*] Mode: {mode}\n"
+            f"[*] Total checks: {total_checks}\n"
+            "[*] Starting scan...\n"
+        )
+
+    @staticmethod
+    def format_result_line(vector_id: int, vector_name: str, *, status: str, severity: str | None = None) -> str:
+        """Format a single result line.
+
+        status: one of '+', '-', '*', '!'
+        """
+        symbol = f"[{status}]"
+        if severity:
+            return f"{symbol} VECTOR_{vector_id:03d}: {vector_name} [{severity}]"
+        return f"{symbol} VECTOR_{vector_id:03d}: {vector_name}"
+
     @staticmethod
     def format_summary(aggregator: ResultAggregator) -> str:
         """Форматирование итоговой сводки"""
         summary = aggregator.get_summary()
-        severity_counts = summary['severity_breakdown']
-        
-        output = f"\n{COLORS['BOLD']}{'='*70}\n"
-        output += f"                      SCAN SUMMARY                           \n"
-        output += f"{'='*70}{COLORS['RESET']}\n\n"
-        
-        output += f"Total checks performed: {summary['total_checks']}\n"
-        output += f"Scan duration: {summary['duration_seconds']:.2f} seconds\n\n"
-        
-        output += f"{COLORS['BOLD']}Vulnerabilities found:{COLORS['RESET']}\n"
-        
-        if severity_counts.get('CRITICAL', 0) > 0:
-            output += f"  {COLORS['CRITICAL']}CRITICAL: {severity_counts['CRITICAL']}{COLORS['RESET']}\n"
-        if severity_counts.get('HIGH', 0) > 0:
-            output += f"  {COLORS['HIGH']}HIGH: {severity_counts['HIGH']}{COLORS['RESET']}\n"
-        if severity_counts.get('MEDIUM', 0) > 0:
-            output += f"  {COLORS['MEDIUM']}MEDIUM: {severity_counts['MEDIUM']}{COLORS['RESET']}\n"
-        if severity_counts.get('LOW', 0) > 0:
-            output += f"  {COLORS['LOW']}LOW: {severity_counts['LOW']}{COLORS['RESET']}\n"
-        
-        if summary['vulnerabilities_found'] == 0:
-            output += f"  {COLORS['LOW']}No vulnerabilities found{COLORS['RESET']}\n"
-        
+        vulns = sorted(aggregator.get_vulnerabilities(), key=lambda r: (r.severity, r.vector_id))
+
         risk_score = aggregator.get_risk_score()
         risk_level = "LOW"
         if risk_score >= 75:
@@ -69,30 +82,40 @@ class OutputFormatter:
             risk_level = "HIGH"
         elif risk_score >= 25:
             risk_level = "MEDIUM"
-        
-        risk_color = COLORS.get(risk_level, COLORS['INFO'])
-        output += f"\n{COLORS['BOLD']}Risk Score: {risk_color}{risk_score}/100 [{risk_level}]{COLORS['RESET']}\n"
-        
-        if summary['device_info']:
-            output += f"\n{COLORS['BOLD']}Device Information:{COLORS['RESET']}\n"
-            for key, value in summary['device_info'].items():
-                output += f"  {key}: {value}\n"
-        
-        output += f"\n{COLORS['BOLD']}{'='*70}{COLORS['RESET']}\n"
-        
+
+        output = "\n" + "=" * 70 + "\n"
+        output += " " * 25 + "SCAN SUMMARY\n"
+        output += "=" * 70 + "\n\n"
+
+        output += f"Total checks performed: {summary['total_checks']}\n"
+        output += f"Scan duration: {summary['duration_seconds']:.2f} seconds\n"
+        output += f"Vulnerabilities found: {summary['vulnerabilities_found']}\n\n"
+
+        if vulns:
+            for v in vulns:
+                output += OutputFormatter.format_result_line(v.vector_id, v.vector_name, status='+', severity=v.severity) + "\n"
+        else:
+            output += "[-] No vulnerabilities found\n"
+
+        output += "\n"
+        output += f"Risk Score: {risk_score}/100 [{risk_level}]\n\n"
+        output += ASSESSMENT_ONLY_DISCLAIMER + "\n"
+        output += "=" * 70 + "\n"
         return output
-    
+
     @staticmethod
     def format_vulnerability_details(vulnerabilities: List[ScanResult]) -> str:
-        """Детальное форматирование уязвимостей"""
+        """Детальное форматирование уязвимостей (verbose)"""
         if not vulnerabilities:
             return "\nNo vulnerabilities to display.\n"
-        
-        output = f"\n{COLORS['BOLD']}{'='*70}\n"
-        output += f"                  VULNERABILITY DETAILS                      \n"
-        output += f"{'='*70}{COLORS['RESET']}\n\n"
-        
+
+        output = "\n" + "=" * 70 + "\n"
+        output += " " * 18 + "VULNERABILITY DETAILS\n"
+        output += "=" * 70 + "\n\n"
+
         for vuln in vulnerabilities:
-            output += OutputFormatter.format_vulnerability(vuln) + "\n\n"
-        
+            output += f"[{vuln.severity}] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name}\n"
+            output += f"Details: {vuln.details}\n"
+            output += f"Timestamp: {vuln.timestamp}\n\n"
+
         return output

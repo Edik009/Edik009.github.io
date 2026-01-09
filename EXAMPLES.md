@@ -13,7 +13,7 @@ python3 main.py -t 192.168.1.100 -m fast
 # Full scan (recommended)
 python3 main.py -t 192.168.1.100 -m full
 
-# Deep scan (all 300 vectors)
+# Deep scan (all 900+ vectors)
 python3 main.py -t 192.168.1.100 -m deep
 ```
 
@@ -56,12 +56,12 @@ python3 main.py -t 192.168.1.100 --threads 15 --timeout 45
 
 ## Filtering Checks
 
-### Network Only
+### Remote/Network Only
 ```bash
-# Only network-level checks (no ADB required)
-python3 main.py -t 192.168.1.100 --no-network=false
+# Only remote/network checks (NO USB REQUIRED)
+python3 main.py -t 192.168.1.100 --remote-only
 
-# This will scan ports, services, protocols
+# This will scan ports, services, protocols, endpoints
 ```
 
 ### ADB Only
