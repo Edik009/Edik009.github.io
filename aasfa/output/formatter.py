@@ -43,12 +43,12 @@ class OutputFormatter:
         return (
             f"{_c('BOLD')}"
             "╔═══════════════════════════════════════════════════════════════╗\n"
-            "║          AASFA Scanner v3.0 - Android Attack Surface          ║\n"
-            "║              Pre-Attack Feasibility Assessment                ║\n"
+            "║          AASFA Scanner v4.0 - Feasibility Assessment      ║\n"
+            "║              Complete Attack Surface Analysis              ║\n"
             "║                                                               ║\n"
             "║ Scanner performs feasibility assessment only and does not    ║\n"
             "║ exploit vulnerabilities. Remote analysis only, no USB/ADB.   ║\n"
-            f"╚═══════════════════════════════════════════════════════════════╝{_c('RESET')}\n"
+            "╚═══════════════════════════════════════════════════════════════╝{_c('RESET')}\n"
         )
 
     @staticmethod
@@ -72,24 +72,29 @@ class OutputFormatter:
 
     @staticmethod
     def format_summary(aggregator: ResultAggregator) -> str:
-        """Форматирование итоговой сводки - MSF style"""
+        """Форматирование итоговой сводки - MSF style v4.0"""
         summary = aggregator.get_summary()
         
-        # Separate legacy and multifactor vulnerabilities
-        legacy_vulns = []
-        multifactor_vulns = []
+        # Separate by layers
+        layer1_vectors = []    # Original Network Vectors (1-550+)
+        layer2_vectors = []    # Multifactor Vectors (1001-1030)
+        layer3_vectors = []    # Side-Channel Vectors (101-200)
         
         for vuln in aggregator.get_vulnerabilities():
             if isinstance(vuln, VectorResult):
-                multifactor_vulns.append(vuln)
+                if 1001 <= vuln.vector_id <= 1030:
+                    layer2_vectors.append(vuln)
+                elif 101 <= vuln.vector_id <= 200:
+                    layer3_vectors.append(vuln)
+                else:
+                    layer1_vectors.append(vuln)
             else:
-                legacy_vulns.append(vuln)
+                layer1_vectors.append(vuln)
 
-        # Sort multifactor vulnerabilities by severity first, then by vector ID
-        multifactor_vulns.sort(key=lambda v: (v.severity, v.vector_id))
-        
-        # Sort legacy vulnerabilities by severity first, then by vector ID  
-        legacy_vulns.sort(key=lambda v: (v.severity, v.vector_id))
+        # Sort by layer and severity
+        layer1_vectors.sort(key=lambda v: (v.severity, v.vector_id))
+        layer2_vectors.sort(key=lambda v: (v.severity, v.vector_id))
+        layer3_vectors.sort(key=lambda v: (v.severity, v.vector_id))
 
         risk_score = aggregator.get_risk_score()
         risk_level = "LOW"
@@ -101,32 +106,72 @@ class OutputFormatter:
             risk_level = "MEDIUM"
 
         output = "\n" + "=" * 70 + "\n"
-        output += " " * 25 + "SCAN SUMMARY\n"
+        output += " " * 20 + "FEASIBILITY ASSESSMENT REPORT\n"
         output += "=" * 70 + "\n\n"
 
-        output += f"Total checks performed: {summary['total_checks']}\n"
-        output += f"Scan duration: {summary['duration_seconds']:.2f} seconds\n\n"
+        output += f"[*] Target: {summary.get('target', 'Unknown')}\n"
+        output += f"[*] Scan Duration: {summary['duration_seconds']:.2f} seconds\n"
+        output += f"[*] Layers: Network ({len(layer1_vectors)}) + Multifactor ({len(layer2_vectors)}) + Side-Channel ({len(layer3_vectors)})\n"
+        output += f"[*] Total Vectors: {summary['total_checks']}\n\n"
 
-        output += f"Vulnerabilities found: {summary['vulnerabilities_found']}\n\n"
+        output += f"[*] Vulnerabilities Found: {summary['vulnerabilities_found']} "
+        
+        # Count by severity
+        all_vulns = layer1_vectors + layer2_vectors + layer3_vectors
+        critical_count = sum(1 for v in all_vulns if v.severity == 'CRITICAL')
+        high_count = sum(1 for v in all_vulns if v.severity == 'HIGH')
+        medium_count = sum(1 for v in all_vulns if v.severity == 'MEDIUM')
+        low_count = sum(1 for v in all_vulns if v.severity == 'LOW')
+        
+        if critical_count + high_count + medium_count + low_count > 0:
+            output += f"({critical_count} CRITICAL, {high_count} HIGH, {medium_count} MEDIUM)"
+        output += "\n\n"
 
-        # Show multifactor vulnerabilities first (new format)
-        if multifactor_vulns:
-            output += "[+] MULTIFACTOR VULNERABILITIES:\n\n"
-            for vuln in multifactor_vulns:
-                output += f"[+] {vuln.vector_id:03d}. {vuln.vector_name} [{vuln.severity}] ({vuln.confidence:.1f}% confidence)\n"
-                output += vuln.format_details() + "\n\n"
+        # Layer 2: Multifactor Vectors
+        if layer2_vectors:
+            output += "=" * 70 + "\n"
+            output += " LAYER 2: MULTIFACTOR CRYPTOGRAPHIC VECTORS \n"
+            output += "=" * 70 + "\n\n"
+            
+            for vuln in layer2_vectors:
+                output += f"[+] {vuln.vector_id:03d}. {vuln.vector_name} [{vuln.severity}] ({vuln.confidence:.0f}% confidence)\n"
+                output += vuln.format_details() + "\n"
 
-        # Show legacy vulnerabilities (old format for compatibility)
-        if legacy_vulns:
-            output += "[+] LEGACY VULNERABILITIES:\n\n"
-            for vuln in legacy_vulns:
-                output += f"[+] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name} [{vuln.severity}]\n"
-                output += f"    {vuln.details}\n\n"
+        # Layer 3: Side-Channel Vectors  
+        if layer3_vectors:
+            output += "=" * 70 + "\n"
+            output += " LAYER 3: SIDE-CHANNEL BEHAVIORAL VECTORS \n"
+            output += "=" * 70 + "\n\n"
+            
+            for vuln in layer3_vectors:
+                output += f"[+] {vuln.vector_id:03d}. {vuln.vector_name} [{vuln.severity}] ({vuln.confidence:.0f}% confidence)\n"
+                output += vuln.format_details() + "\n"
 
-        if not multifactor_vulns and not legacy_vulns:
-            output += "No vulnerabilities found during this scan.\n\n"
+        # Layer 1: Original Network Vectors (legacy)
+        if layer1_vectors:
+            output += "=" * 70 + "\n"
+            output += " LAYER 1: NETWORK VECTORS \n"
+            output += "=" * 70 + "\n\n"
+            
+            for vuln in layer1_vectors:
+                if isinstance(vuln, VectorResult):
+                    output += f"[+] {vuln.vector_id:03d}. {vuln.vector_name} [{vuln.severity}] ({vuln.confidence:.0f}% confidence)\n"
+                    output += vuln.format_details() + "\n"
+                else:
+                    output += f"[+] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name} [{vuln.severity}]\n"
+                    output += f"    {vuln.details}\n\n"
 
-        output += f"Risk Score: {risk_score}/100 [{risk_level}]\n\n"
+        # Remediation section
+        output += "=" * 70 + "\n"
+        output += " REMEDIATION & NOTES \n"
+        output += "=" * 70 + "\n\n"
+        
+        output += "[!] Note: This is FEASIBILITY ASSESSMENT only\n"
+        output += "[!] No vulnerabilities were exploited\n"
+        output += "[!] Assessment identifies attack surface, not vulnerabilities\n"
+        output += "[!] Results are for authorized testing only\n\n"
+
+        output += f"[*] Risk Score: {risk_score}/100 [{risk_level}]\n\n"
         output += ASSESSMENT_ONLY_DISCLAIMER + "\n"
         output += "=" * 70 + "\n"
         return output

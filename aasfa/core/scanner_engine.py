@@ -129,6 +129,16 @@ class ScannerEngine:
     def _load_check_module(self, check_function: str):
         """Динамическая загрузка функции проверки"""
         try:
+            # NEW: Side-channel checks first (vectors 101-200)
+            sidechannel_module = importlib.import_module("aasfa.checks.side_channel_checks")
+            if hasattr(sidechannel_module, check_function):
+                return getattr(sidechannel_module, check_function)
+
+            # Additional side-channel checks (part 2)
+            sidechannel_part2_module = importlib.import_module("aasfa.checks.side_channel_checks_part2")
+            if hasattr(sidechannel_part2_module, check_function):
+                return getattr(sidechannel_part2_module, check_function)
+
             # NEW: Multifactor checks first (1001-1030)
             multifactor_module = importlib.import_module("aasfa.checks.multifactor_checks")
             if hasattr(multifactor_module, check_function):
