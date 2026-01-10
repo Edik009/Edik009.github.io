@@ -21,7 +21,15 @@ class ScanConfig:
 
     timeout: int = 30
     threads: int = 10
+
+    # Debug verbosity for ScannerEngine (0=off, 1=stages, 2=verbose)
     debug_level: int = 0
+
+    # Hard timeout for a single vector execution inside thread pool
+    thread_timeout: int = 10
+
+    # Network connector port scan timeout (seconds)
+    port_scan_timeout: int = 2
 
     def validate(self) -> bool:
         """Валидация конфигурации"""
@@ -32,6 +40,12 @@ class ScanConfig:
         if self.threads < 1 or self.threads > 50:
             return False
         if self.timeout < 1:
+            return False
+        if self.thread_timeout < 1:
+            return False
+        if self.port_scan_timeout < 1:
+            return False
+        if self.debug_level < 0:
             return False
         if self.remote_only and (self.adb_only or self.no_network):
             return False

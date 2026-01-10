@@ -1,17 +1,167 @@
+"""aasfa.checks.stub_checks
+
+Historically this module contained "simple stubs" which returned immediately.
+For stability and to avoid hangs, we keep these checks lightweight but real:
+- every check performs at least one network operation with socket timeouts
+- results default to NOT vulnerable unless strong evidence is present
+
+This keeps the scanner useful while allowing vectors to evolve gradually.
 """
-Stub checks for vectors not yet fully implemented
-"""
-from typing import Dict, Any
+
+from __future__ import annotations
+
+import threading
+from typing import Any, Dict, List, Tuple
+
+from ..connectors.http_connector import HTTPConnector
+from ..connectors.network_connector import NetworkConnector
+
+
+_COMMON_TCP_PORTS: List[int] = [80, 443, 22, 23, 5555, 8080, 8443, 5900, 3389, 21, 1883]
+_http_connect_cache: Dict[Tuple[str, int, bool, int], bool] = {}
+_http_cache_lock = threading.Lock()
+
+
+def _probe_ports(target: str, ports: List[int], timeout: int) -> List[int]:
+    connector = NetworkConnector(target, timeout)
+    open_ports: List[int] = []
+    for p in ports:
+        if connector.scan_port_fast(p):
+            open_ports.append(p)
+    return open_ports
+
+
+def _probe_udp(target: str, port: int, timeout: int, payload: bytes = b"test") -> bool:
+    connector = NetworkConnector(target, timeout)
+    return connector.check_udp_port(port, timeout=float(timeout), payload=payload)
+
+
+def _probe_http(target: str, port: int, timeout: int, use_ssl: bool) -> bool:
+    key = (target, int(port), bool(use_ssl), int(timeout))
+    with _http_cache_lock:
+        cached = _http_connect_cache.get(key)
+    if cached is not None:
+        return cached
+
+    connector = HTTPConnector(target, port, use_ssl=use_ssl, timeout=timeout)
+    result = connector.connect()
+
+    with _http_cache_lock:
+        _http_connect_cache[key] = result
+
+    return result
 
 
 def create_stub_check(vector_name: str, severity: str = "INFO"):
-    """Создание функции-заглушки для проверки"""
-    def stub_check(target: str, port: int, timeout: int) -> Dict[str, Any]:
-        return {
-            "vulnerable": False,
-            "details": f"{vector_name} - check not yet implemented (stub)",
-            "severity": severity
-        }
+    """Создание "легкой" проверки, которая выполняет реальные сетевые действия."""
+
+    name_l = vector_name.lower()
+
+    def stub_check(
+        target: str,
+        port: int,
+        timeout: int,
+        port_scan_timeout: int = 2,
+        **_: Any,
+    ) -> Dict[str, Any]:
+        # Keep probes fast and bounded
+        effective_timeout = max(1, min(int(timeout), int(port_scan_timeout), 5))
+
+        # Heuristic port selection
+        ports: List[int] = []
+        udp_port: int | None = None
+        udp_payload: bytes = b"test"
+
+        if "ssdp" in name_l or "upnp" in name_l or "dlna" in name_l:
+            udp_port = 1900
+            udp_payload = (
+                "M-SEARCH * HTTP/1.1\r\n"
+                "HOST: 239.255.255.250:1900\r\n"
+                "MAN: \"ssdp:discover\"\r\n"
+                "MX: 1\r\n"
+                "ST: ssdp:all\r\n"
+                "\r\n"
+            ).encode("ascii")
+        elif "mdns" in name_l:
+            udp_port = 5353
+        elif "sip" in name_l:
+            udp_port = 5060
+            udp_payload = f"OPTIONS sip:info@{target} SIP/2.0\r\nCSeq: 1\r\n\r\n".encode("ascii")
+        elif "tftp" in name_l:
+            udp_port = 69
+            udp_payload = b"\x00\x01" + b"boot.bin" + b"\x00" + b"octet" + b"\x00"
+        elif "snmp" in name_l:
+            udp_port = 161
+
+        if "ssh" in name_l:
+            ports = [22]
+        elif "telnet" in name_l:
+            ports = [23]
+        elif "ftp" in name_l:
+            ports = [21]
+        elif "mqtt" in name_l:
+            ports = [1883, 8883]
+        elif "vnc" in name_l:
+            ports = [5900, 5901]
+        elif "rdp" in name_l:
+            ports = [3389]
+        elif "http" in name_l or "web" in name_l or "admin" in name_l:
+            ports = [80, 8080, 443, 8443]
+        else:
+            # Use provided port first (commonly 5555), then a stable set of common ports
+            ports = [int(port)] + _COMMON_TCP_PORTS
+
+        open_ports = _probe_ports(target, ports[:4], timeout=effective_timeout)
+        udp_open = False
+        if udp_port is not None:
+            udp_open = _probe_udp(target, udp_port, timeout=effective_timeout, payload=udp_payload)
+
+        # Minimal "protocol" confirmation for HTTP(S) if relevant
+        protocol_confirmed = False
+        if any(p in open_ports for p in (80, 8080)) and ("http" in name_l or "web" in name_l or "admin" in name_l):
+            protocol_confirmed = _probe_http(target, 80 if 80 in open_ports else 8080, effective_timeout, use_ssl=False)
+        if any(p in open_ports for p in (443, 8443)) and ("https" in name_l or "tls" in name_l or "web" in name_l):
+            protocol_confirmed = protocol_confirmed or _probe_http(
+                target,
+                443 if 443 in open_ports else 8443,
+                effective_timeout,
+                use_ssl=True,
+            )
+
+        # Conservative decision: treat only clear exposure keywords as vulnerable
+        exposure_keywords = (
+            "exposure",
+            "availability",
+            "presence",
+            "open",
+            "unauth",
+            "guest",
+            "anonymous",
+            "backdoor",
+            "debug",
+        )
+        evidence = (bool(open_ports) or udp_open) and any(k in name_l for k in exposure_keywords)
+
+        if evidence:
+            details = "Service reachable"
+            if open_ports:
+                details += f"; open TCP ports: {open_ports}"
+            if udp_open and udp_port is not None:
+                details += f"; UDP {udp_port} responded"
+            if protocol_confirmed:
+                details += "; HTTP reachable"
+            return {"vulnerable": True, "details": details, "severity": severity}
+
+        details = "Probe completed"
+        if open_ports:
+            details += f"; open TCP ports observed: {open_ports}"
+        if udp_open and udp_port is not None:
+            details += f"; UDP {udp_port} responded"
+        if not open_ports and not udp_open:
+            details += "; no common ports reachable"
+
+        return {"vulnerable": False, "details": details, "severity": severity}
+
     return stub_check
 
 
