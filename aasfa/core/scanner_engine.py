@@ -22,6 +22,7 @@ class ScannerEngine:
     def __init__(self, config: ScanConfig):
         self.config = config
         self.logger = get_logger()
+        self.debug_level = getattr(config, 'debug_level', 0)
         self.registry = VectorRegistry()
         self.analyzer = LogicalAnalyzer(self.registry)
         self.aggregator = ResultAggregator()
@@ -31,10 +32,17 @@ class ScannerEngine:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
+        self.debug_log(1, "Scanner initialized")
+
     def _signal_handler(self, signum, frame):
         """Обработчик сигналов для graceful shutdown"""
         self.logger.warning("\n[!] Shutdown requested, finishing current checks...")
         self.shutdown_requested = True
+
+    def debug_log(self, level: int, message: str):
+        """Выводит debug логи если debug_level >= level"""
+        if self.debug_level >= level:
+            print(f"[DEBUG] {message}")
 
     def _execute_check(self, vector: Vector) -> ScanResult:
         """Выполнение одной проверки"""
@@ -275,6 +283,16 @@ class ScannerEngine:
     def scan(self) -> ResultAggregator:
         """Запуск сканирования"""
 
+        # STAGE 2: Loading vectors
+        self.debug_log(1, "Loading vectors...")
+        all_vectors = self.registry.get_all_vectors()
+        if self.debug_level >= 2:
+            for vector in all_vectors:
+                self.debug_log(2, f"Loaded vector: {vector.id:03d} ({vector.name})")
+        self.debug_log(1, f"Loaded {len(all_vectors)} vectors")
+
+        # STAGE 3: Filtering vectors
+        self.debug_log(1, "Filtering vectors...")
         vectors_to_scan = self.registry.filter_vectors(self.config)
 
         # Skip ADB vectors - network-only analysis
@@ -282,14 +300,27 @@ class ScannerEngine:
 
         sorted_vectors = self.analyzer.get_execution_order(vectors_to_scan)
         total_vectors = len(sorted_vectors)
+        self.debug_log(1, f"Filtered to {total_vectors} vectors (mode: {self.config.mode.upper()})")
 
         print(OutputFormatter.format_scan_context(self.config.target_ip, self.config.mode, total_vectors), end="")
 
+        # STAGE 4: Starting scanner
+        self.debug_log(1, "Starting scanner...")
+
         self.progress_bar.start(total_vectors)
+
+        # STAGE 5: Creating thread pool
+        self.debug_log(1, f"Creating thread pool ({self.config.threads} workers)")
 
         with ThreadPoolExecutor(max_workers=self.config.threads) as executor:
             pending = sorted_vectors.copy()
             completed_count = 0
+
+            # STAGE 6: Submitting tasks to executor
+            self.debug_log(1, f"Submitting {len(sorted_vectors)} vectors to executor")
+
+            # STAGE 7: Processing results
+            self.debug_log(1, "Processing results...")
 
             while pending and not self.shutdown_requested:
                 ready_vectors = self.analyzer.get_next_vectors(pending)
@@ -314,7 +345,10 @@ class ScannerEngine:
                 batch_size = min(len(ready_vectors), self.config.threads * 2)
                 batch = ready_vectors[:batch_size]
 
-                futures = {executor.submit(self._execute_check, vector): vector for vector in batch}
+                futures = {}
+                for vector in batch:
+                    self.debug_log(2, f"Submitting VECTOR_{vector.id:03d} to executor")
+                    futures[executor.submit(self._execute_check, vector)] = vector
 
                 for future in as_completed(futures):
                     vector = futures[future]
@@ -323,6 +357,10 @@ class ScannerEngine:
                         result = future.result(timeout=self.config.timeout)
                     except Exception as e:
                         result = ScanResult(vector.id, vector.name, False, f"Error: {e}", "INFO")
+
+                    # Debug log for level 2
+                    status = "CONFIRMED" if result.vulnerable else "NOT_FOUND"
+                    self.debug_log(2, f"Future completed: VECTOR_{vector.id:03d} → {status}")
 
                     # Track all checks performed
                     self.aggregator.add_check_performed(result)
@@ -345,4 +383,8 @@ class ScannerEngine:
 
         self.progress_bar.finish()
         self.aggregator.finish()
+
+        # STAGE 8: Completion
+        self.debug_log(1, "Scan completed")
+
         return self.aggregator

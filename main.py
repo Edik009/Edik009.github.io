@@ -69,6 +69,13 @@ Remote analysis only, no USB/ADB required.
         help='Number of threads for parallel scanning (default: 20)'
     )
 
+    parser.add_argument(
+        '-d', '--debug',
+        action='count',
+        default=0,
+        help='Enable debug mode (use -d for level 1, -dd for level 2)'
+    )
+
     return parser.parse_args()
 
 
@@ -106,7 +113,8 @@ def main():
         adb_only=False,  # Never do ADB-only
         remote_only=True,  # Always remote-only
         timeout=args.timeout,
-        threads=args.threads
+        threads=args.threads,
+        debug_level=args.debug
     )
 
     if not config.validate():

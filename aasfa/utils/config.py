@@ -21,6 +21,7 @@ class ScanConfig:
 
     timeout: int = 30
     threads: int = 10
+    debug_level: int = 0
 
     def validate(self) -> bool:
         """Валидация конфигурации"""
