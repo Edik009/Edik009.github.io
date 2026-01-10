@@ -90,6 +90,34 @@ Remote analysis only, no USB/ADB required.
         help='Enable debug mode (use -d for level 1, -dd for level 2)'
     )
 
+    # NEW: Phase 1 - Side-Channel Analysis Parameters
+    parser.add_argument(
+        '--timing-samples',
+        type=int,
+        default=30,
+        help='Number of timing samples to collect for statistical analysis (10-300, default: 30)'
+    )
+
+    parser.add_argument(
+        '--enrichment-mode',
+        choices=['offline', 'enriched'],
+        default='offline',
+        help='Analysis mode: offline (baseline only) or enriched (includes external data)'
+    )
+
+    parser.add_argument(
+        '--baseline-db',
+        type=str,
+        default='aasfa/data/baseline.json',
+        help='Path to baseline database for device fingerprinting (default: aasfa/data/baseline.json)'
+    )
+
+    parser.add_argument(
+        '--packet-capture',
+        action='store_true',
+        help='Enable packet capture for advanced side-channel analysis'
+    )
+
     return parser.parse_args()
 
 
@@ -113,6 +141,19 @@ def validate_arguments(args) -> bool:
 
     if args.port_scan_timeout < 1:
         print(f"[!] Error: Port scan timeout must be at least 1 second")
+        return False
+
+    # NEW: Phase 1 validation
+    if args.timing_samples < 10 or args.timing_samples > 300:
+        print(f"[!] Error: Timing samples must be between 10 and 300")
+        return False
+
+    if args.enrichment_mode not in ["offline", "enriched"]:
+        print(f"[!] Error: Enrichment mode must be 'offline' or 'enriched'")
+        return False
+
+    if not args.baseline_db.endswith('.json'):
+        print(f"[!] Error: Baseline database must be a JSON file")
         return False
 
     return True
@@ -139,6 +180,11 @@ def main():
         debug_level=args.debug,
         thread_timeout=args.thread_timeout,
         port_scan_timeout=args.port_scan_timeout,
+        # NEW: Phase 1 - Side-Channel Analysis Parameters
+        timing_samples=args.timing_samples,
+        enrichment_mode=args.enrichment_mode,
+        baseline_db=args.baseline_db,
+        packet_capture_enabled=args.packet_capture,
     )
 
     if not config.validate():

@@ -31,6 +31,12 @@ class ScanConfig:
     # Network connector port scan timeout (seconds)
     port_scan_timeout: int = 2
 
+    # NEW: Phase 1 Infrastructure - Side-Channel Analysis
+    timing_samples: int = 30  # Number of timing samples to collect
+    enrichment_mode: str = "offline"  # offline | enriched
+    baseline_db: str = "aasfa/data/baseline.json"  # Baseline database path
+    packet_capture_enabled: bool = False  # Enable packet capture for analysis
+
     def validate(self) -> bool:
         """Валидация конфигурации"""
         if not self.target_ip:
@@ -49,6 +55,15 @@ class ScanConfig:
             return False
         if self.remote_only and (self.adb_only or self.no_network):
             return False
+        
+        # NEW: Phase 1 validation
+        if self.timing_samples < 10 or self.timing_samples > 300:
+            return False
+        if self.enrichment_mode not in ["offline", "enriched"]:
+            return False
+        if self.baseline_db and not self.baseline_db.endswith('.json'):
+            return False
+            
         return True
 
 

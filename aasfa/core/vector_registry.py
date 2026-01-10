@@ -17,6 +17,7 @@ from ..vectors.oem_supply_chain import get_oem_supply_vectors
 from ..vectors.supply_chain_exotic import get_supply_chain_vectors
 from ..vectors.additional_vectors import get_additional_vectors
 from ..vectors.multifactor_vectors import get_multifactor_vectors
+from ..vectors.side_channel_vectors import get_side_channel_vectors
 
 
 @dataclass
@@ -83,7 +84,8 @@ class VectorRegistry:
         all_vectors.update(get_oem_supply_vectors())
         all_vectors.update(get_ai_system_vectors())
         all_vectors.update(get_additional_vectors())
-        all_vectors.update(get_multifactor_vectors())  # NEW: 30 multifactor vectors
+        all_vectors.update(get_multifactor_vectors())  # NEW: 30 multifactor vectors (1001-1030)
+        all_vectors.update(get_side_channel_vectors())  # NEW: 50 side-channel vectors (101-200)
 
         seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
@@ -166,6 +168,7 @@ class VectorRegistry:
             "category_I": len(self.get_vectors_by_category("I")),
             "category_J": len(self.get_vectors_by_category("J")),
             "category_M": len(self.get_vectors_by_category("M")),  # Multifactor vectors
+            "category_S": len(self.get_vectors_by_category("S")),  # Side-channel vectors
             "requires_adb": len(self.get_vectors_requiring_adb()),
             "requires_network": len(self.get_vectors_requiring_network()),
         }
