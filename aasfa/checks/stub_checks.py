@@ -166,7 +166,7 @@ def create_stub_check(vector_name: str, severity: str = "INFO"):
 
 
 check_ssh_legacy_ciphers = create_stub_check("SSH Legacy Ciphers", "MEDIUM")
-check_adb_pairing_misc = create_stub_check("ADB Pairing Misconfiguration", "MEDIUM")
+# check_adb_pairing_misc = create_stub_check("ADB Pairing Misconfiguration", "MEDIUM")  # REMOVED: ADB checks deleted
 check_ssdp_reflection = create_stub_check("SSDP Reflection", "LOW")
 check_rtsp_exposure = create_stub_check("RTSP Exposure", "MEDIUM")
 check_websocket_unauth = create_stub_check("WebSocket Unauth", "HIGH")

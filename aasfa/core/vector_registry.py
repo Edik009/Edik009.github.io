@@ -16,6 +16,7 @@ from ..vectors.network_services import get_network_services_vectors
 from ..vectors.oem_supply_chain import get_oem_supply_vectors
 from ..vectors.supply_chain_exotic import get_supply_chain_vectors
 from ..vectors.additional_vectors import get_additional_vectors
+from ..vectors.multifactor_vectors import get_multifactor_vectors
 
 
 @dataclass
@@ -26,16 +27,17 @@ class Vector:
     category: str
     name: str
     description: str
-    check_function: str
-    requires_adb: bool
-    requires_network: bool
+    check_functions: List[str]  # ВМЕСТО check_function - список функций!
     priority: int
     depends_on: List[int]
     tags: List[str]
+    requires_adb: bool = False  # Все векторы теперь network-only
+    requires_network: bool = True
     severity: str = "INFO"
     weights: Dict[str, float] = None
     confirmed_threshold: float = 0.7
     inconclusive_threshold: float = 0.4
+    check_count: int = 1  # сколько независимых проверок нужно
 
     def to_dict(self) -> Dict[str, Any]:
         """Конвертация в словарь"""
@@ -44,7 +46,8 @@ class Vector:
             "category": self.category,
             "name": self.name,
             "description": self.description,
-            "check_function": self.check_function,
+            "check_function": self.check_functions[0] if self.check_functions else None,  # backward compatibility
+            "check_functions": self.check_functions,
             "requires_adb": self.requires_adb,
             "requires_network": self.requires_network,
             "priority": self.priority,
@@ -54,6 +57,7 @@ class Vector:
             "weights": self.weights,
             "confirmed_threshold": self.confirmed_threshold,
             "inconclusive_threshold": self.inconclusive_threshold,
+            "check_count": self.check_count,
         }
 
 
@@ -69,16 +73,17 @@ class VectorRegistry:
         all_vectors: Dict[int, Dict[str, Any]] = {}
 
         all_vectors.update(get_network_vectors())
-        all_vectors.update(get_android_os_vectors())
-        all_vectors.update(get_application_vectors())
+        # REMOVED: android_os_vectors (ADB required)
+        # REMOVED: application_vectors (ADB required)
         all_vectors.update(get_supply_chain_vectors())
         all_vectors.update(get_network_services_vectors())
-        all_vectors.update(get_firmware_os_vectors())
-        all_vectors.update(get_ai_ml_vectors())
+        # REMOVED: firmware_os_vectors (ADB required)
+        # REMOVED: ai_ml_vectors (ADB required)
         all_vectors.update(get_behavioral_vectors())
         all_vectors.update(get_oem_supply_vectors())
         all_vectors.update(get_ai_system_vectors())
         all_vectors.update(get_additional_vectors())
+        all_vectors.update(get_multifactor_vectors())  # NEW: 30 multifactor vectors
 
         seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
@@ -160,6 +165,7 @@ class VectorRegistry:
             "category_H": len(self.get_vectors_by_category("H")),
             "category_I": len(self.get_vectors_by_category("I")),
             "category_J": len(self.get_vectors_by_category("J")),
+            "category_M": len(self.get_vectors_by_category("M")),  # Multifactor vectors
             "requires_adb": len(self.get_vectors_requiring_adb()),
             "requires_network": len(self.get_vectors_requiring_network()),
         }

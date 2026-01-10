@@ -399,28 +399,9 @@ _VECTOR_NAMES = _VECTOR_NAMES[:380]
 
 
 def get_ai_ml_vectors() -> Dict[int, Dict[str, Any]]:
-    """Возвращает все AI/ML/Modern векторы (521-900)"""
+    """Возвращает все AI/ML/Modern векторы (521-900) - REMOVED: All ADB vectors deleted"""
 
     vectors: Dict[int, Dict[str, Any]] = {}
-
-    start_id = 521
-    for offset, name in enumerate(_VECTOR_NAMES):
-        vector_id = start_id + offset
-        vectors[vector_id] = {
-            "id": vector_id,
-            "category": "G",
-            "name": name,
-            "description": name,
-            "check_function": f"check_vector_{vector_id}",
-            "requires_adb": True,
-            "requires_network": False,
-            "priority": 4,
-            "depends_on": [6],
-            "tags": ["ai", "ml", "modern"],
-            "severity": "INFO",
-            "weights": None,
-            "confirmed_threshold": 0.7,
-            "inconclusive_threshold": 0.4,
-        }
+    # REMOVED: All vectors with requires_adb=True were removed
 
     return vectors

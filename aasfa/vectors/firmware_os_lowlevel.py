@@ -11,24 +11,7 @@ def get_firmware_os_vectors() -> Dict[int, Dict[str, Any]]:
 
     vectors = {}
 
-    # Generate vectors 381-520
-    for vector_id in range(381, 521):
-        name = f"Firmware/OS Vector {vector_id}"
-        vectors[vector_id] = {
-            "id": vector_id,
-            "category": "F",
-            "name": name,
-            "description": f"Firmware/OS security check: {name}",
-            "check_function": f"check_vector_{vector_id}",
-            "requires_adb": True,
-            "requires_network": False,
-            "priority": 4,
-            "depends_on": [6],
-            "tags": ["firmware", "os", "low-level"],
-            "severity": "INFO",
-            "weights": None,
-            "confirmed_threshold": 0.7,
-            "inconclusive_threshold": 0.4,
-        }
+    # Generate vectors 381-520 - REMOVED: All ADB vectors deleted
+    # This section was removed as part of ADB vector removal
 
     return vectors

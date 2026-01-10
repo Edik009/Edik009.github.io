@@ -121,7 +121,7 @@ def get_oem_supply_vectors() -> Dict[int, Dict[str, Any]]:
             "category": "I",
             "name": name,
             "description": f"OEM/Supply Chain analysis: {name}",
-            "check_function": f"check_vector_{vector_id}",
+            "check_functions": [f"check_vector_{vector_id}"],
             "requires_adb": False,
             "requires_network": True,
             "priority": 4,
@@ -136,6 +136,7 @@ def get_oem_supply_vectors() -> Dict[int, Dict[str, Any]]:
             },
             "confirmed_threshold": 0.6,
             "inconclusive_threshold": 0.35,
+            "check_count": 1,  # Single check for now
         }
 
     return vectors

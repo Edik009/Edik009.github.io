@@ -19,7 +19,7 @@ def get_network_services_vectors() -> Dict[int, Dict[str, Any]]:
             "category": "E",
             "name": name,
             "description": f"Network service check: {name}",
-            "check_function": f"check_vector_{vector_id}",
+            "check_functions": [f"check_vector_{vector_id}"],
             "requires_adb": False,
             "requires_network": True,
             "priority": 3,
@@ -29,6 +29,7 @@ def get_network_services_vectors() -> Dict[int, Dict[str, Any]]:
             "weights": None,
             "confirmed_threshold": 0.7,
             "inconclusive_threshold": 0.4,
+            "check_count": 1,  # Single check for now
         }
 
     return vectors
