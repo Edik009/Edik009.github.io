@@ -129,6 +129,16 @@ class ScannerEngine:
     def _load_check_module(self, check_function: str):
         """Динамическая загрузка функции проверки"""
         try:
+            # NEW: Android Ultra Advanced checks (vectors 4000-4999)
+            android_ultra_module = importlib.import_module("aasfa.checks.android_ultra_advanced_checks")
+            if hasattr(android_ultra_module, check_function):
+                return getattr(android_ultra_module, check_function)
+            
+            # NEW: Android Advanced checks (vectors 2000-3999)
+            android_advanced_module = importlib.import_module("aasfa.checks.android_advanced_checks")
+            if hasattr(android_advanced_module, check_function):
+                return getattr(android_advanced_module, check_function)
+            
             # NEW: Side-channel checks first (vectors 101-200)
             sidechannel_module = importlib.import_module("aasfa.checks.side_channel_checks")
             if hasattr(sidechannel_module, check_function):
@@ -337,10 +347,19 @@ class ScannerEngine:
         if not result.vulnerable:
             return ""
 
-        if result.details.lower().startswith("skipped"):
+        # Конвертируем details в строку если это список
+        details_str = ""
+        if isinstance(result.details, list):
+            details_str = " ".join(result.details) if result.details else ""
+        else:
+            details_str = str(result.details)
+        
+        details_lower = details_str.lower()
+
+        if details_lower.startswith("skipped"):
             return OutputFormatter.format_result_line(vector.id, vector.name, status='*')
 
-        if result.details.lower().startswith("error"):
+        if details_lower.startswith("error"):
             return OutputFormatter.format_result_line(vector.id, vector.name, status='!')
 
         if result.vulnerable:
