@@ -342,17 +342,22 @@ class ScannerEngine:
 
         return True
 
-    def _format_live_line(self, vector: Vector, result: ScanResult) -> str:
+    def _format_live_line(self, vector: Vector, result) -> str:
+        """Format a result line for live display - handles both ScanResult and VectorResult"""
         # Only show vulnerabilities (vulnerable=True)
         if not result.vulnerable:
             return ""
 
-        # Конвертируем details в строку если это список
+        # Safely convert details to string (handles list or string)
         details_str = ""
-        if isinstance(result.details, list):
-            details_str = " ".join(result.details) if result.details else ""
-        else:
-            details_str = str(result.details)
+        try:
+            if hasattr(result, 'details'):
+                if isinstance(result.details, list):
+                    details_str = " ".join(str(d) for d in result.details) if result.details else ""
+                else:
+                    details_str = str(result.details)
+        except Exception as e:
+            details_str = f"Error formatting details: {str(e)}"
         
         details_lower = details_str.lower()
 

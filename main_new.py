@@ -1,13 +1,11 @@
-#!/usr/bin/env python3
 """
 AASFA Scanner v5.0 - Complete Rewrite
-Pure console output, real multifactor verification, device identification
+Pure console output, multifactor verification, real device identification
 """
 
 import sys
 import argparse
 import time
-from datetime import datetime
 from typing import Optional
 
 from aasfa.utils.config import ScanConfig
@@ -16,14 +14,14 @@ from aasfa.utils.validators import validate_ip
 from aasfa.core.multifactor_scanner import MultifactorScanner, VectorScheduler
 from aasfa.core.device_identifier import identify_device_real
 from aasfa.core.result_aggregator import ResultAggregator
-from aasfa.output.formatter_clean import OutputFormatter
+from aasfa.output.clean_formatter import CleanTextFormatter
 
 
 def interactive_device_identification():
     """Real device identification (not a stub)"""
-    print(OutputFormatter.format_header())
+    print(CleanTextFormatter.format_header())
     print("DEVICE IDENTIFICATION MODE")
-    print("=" * 70) 
+    print("=" * 70)
     print()
     
     target_ip = input("Enter target IP address: ").strip()
@@ -63,7 +61,7 @@ def interactive_device_identification():
         device_info = identify_device_real(config)
         
         # Display results
-        print(OutputFormatter.format_device_identification(device_info))
+        print(CleanTextFormatter.format_device_identification(device_info))
         
         # Quick security assessment
         aggregator = ResultAggregator()
@@ -78,16 +76,9 @@ def interactive_device_identification():
             scanner.check_open_port_23_telnet(),
             scanner.check_open_port_21_ftp(),
             scanner.check_ssh_weak_ciphers(),
+            scanner.check_adb_debugging_enabled() if device_info.get('device_type') == 'Android Device' else None,
+            scanner.check_weak_ssl_tls()
         ]
-        
-        # Add Android-specific check if it's an Android device
-        if 'Android' in device_info.get('os_name', ''):
-            try:
-                critical_checks.append(scanner.check_adb_debugging_enabled())
-            except:
-                pass
-        
-        critical_checks.append(scanner.check_weak_ssl_tls())
         
         vulnerable_count = 0
         for result in critical_checks:
@@ -119,7 +110,7 @@ def interactive_device_identification():
 
 def run_full_scan(target_ip: str, mode: str = 'deep', verbose: bool = False):
     """Run full multifactor security scan"""
-    print(OutputFormatter.format_header())
+    print(CleanTextFormatter.format_header())
     
     config = ScanConfig(
         target_ip=target_ip,
@@ -148,7 +139,7 @@ def run_full_scan(target_ip: str, mode: str = 'deep', verbose: bool = False):
         print("Phase 1: Device Identification...")
         print("=" * 70)
         device_info = identify_device_real(config)
-        print(OutputFormatter.format_device_identification(device_info))
+        print(CleanTextFormatter.format_device_identification(device_info))
         
         # Run multifactor scan
         print("Phase 2: Multifactor Security Scan...")
@@ -163,7 +154,7 @@ def run_full_scan(target_ip: str, mode: str = 'deep', verbose: bool = False):
         scan_duration = time.time() - start_time
         
         # Display comprehensive results
-        print(OutputFormatter.format_summary(aggregator, scan_duration))
+        print(CleanTextFormatter.format_summary(aggregator, scan_duration))
         
         # Critical vulnerabilities exit with code 2
         severity_counts = aggregator.get_severity_counts()
@@ -185,10 +176,10 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python main.py                         # Interactive device identification
-  python main.py -t 192.168.1.100        # Quick device scan  
-  python main.py -t 192.168.1.100 -m deep # Full multifactor scan
-  python main.py -t 192.168.1.100 -v     # Verbose output
+  python main_new.py                         # Interactive device identification
+  python main_new.py -t 192.168.1.100        # Quick device scan
+  python main_new.py -t 192.168.1.100 -m deep # Full multifactor scan
+  python main_new.py -t 192.168.1.100 -v     # Verbose output
 
 Security Assessment Only:
   This tool identifies vulnerabilities but does NOT exploit them.
@@ -235,7 +226,7 @@ Security Assessment Only:
 def interactive_menu():
     """Interactive Russian menu"""
     while True:
-        print(OutputFormatter.format_header())
+        print(CleanTextFormatter.format_header())
         print("ГЛАВНОЕ МЕНЮ")
         print("=" * 70)
         print()
@@ -274,7 +265,7 @@ def interactive_menu():
             sys.exit(0)
         except Exception as e:
             print(f"\n\nОШИБКА: {str(e)}")
-            time.sleep(2)
+            input("Нажмите Enter...")
 
 
 def main():
@@ -292,7 +283,7 @@ def main():
         
         if not args.target:
             print("ERROR: Target IP address required for CLI mode")
-            print("Use: python main.py -t <IP_ADDRESS>")
+            print("Use: python main_new.py -t <IP_ADDRESS>")
             sys.exit(1)
         
         if not validate_ip(args.target):
