@@ -154,6 +154,7 @@ def main():
         engine = ScannerEngine(config)
         aggregator = engine.scan()
 
+        # NEW: Выводим результаты ТОЛЬКО в конце сканирования
         print(OutputFormatter.format_summary(aggregator))
 
         vulnerabilities = aggregator.get_vulnerabilities()

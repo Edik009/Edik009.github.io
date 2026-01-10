@@ -6,8 +6,55 @@ from datetime import datetime
 from collections import defaultdict
 
 
+class VectorResult:
+    """Результат многофакторной проверки вектора"""
+    
+    def __init__(self, vector_id: int, vector_name: str, checks_passed: int, 
+                 checks_total: int, confidence: float, vulnerable: bool,
+                 details: List[str], severity: str = "INFO", timestamp: str = None):
+        self.vector_id = vector_id
+        self.vector_name = vector_name
+        self.checks_passed = checks_passed
+        self.checks_total = checks_total
+        self.confidence = confidence
+        self.vulnerable = vulnerable
+        self.details = details
+        self.severity = severity
+        self.timestamp = timestamp or datetime.now().isoformat()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Конвертация в словарь"""
+        return {
+            "vector_id": self.vector_id,
+            "vector_name": self.vector_name,
+            "checks_passed": self.checks_passed,
+            "checks_total": self.checks_total,
+            "confidence": f"{self.confidence:.1f}%",
+            "vulnerable": self.vulnerable,
+            "details": self.details,
+            "severity": self.severity,
+            "timestamp": self.timestamp,
+        }
+
+    def format_details(self) -> str:
+        """Форматирование деталей для вывода"""
+        if not self.details:
+            return "No details available"
+        
+        lines = []
+        for detail in self.details:
+            if detail.startswith("✓"):
+                lines.append(f"    {detail}")
+            elif detail.startswith("✗"):
+                lines.append(f"    {detail}")
+            else:
+                lines.append(f"    {detail}")
+        
+        return "\n".join(lines)
+
+
 class ScanResult:
-    """Результат одной проверки"""
+    """Результат одной проверки (legacy для обратной совместимости)"""
     
     def __init__(self, vector_id: int, vector_name: str, vulnerable: bool, 
                  details: str, severity: str = "INFO", timestamp: str = None):
@@ -35,6 +82,7 @@ class ResultAggregator:
     
     def __init__(self):
         self.results: List[ScanResult] = []
+        self.vector_results: List[VectorResult] = []  # NEW: Для многофакторных векторов
         self.all_checks_performed: List[ScanResult] = []
         self.start_time = datetime.now()
         self.end_time = None
@@ -44,6 +92,19 @@ class ResultAggregator:
         """Добавление результата"""
         self.results.append(result)
         self.all_checks_performed.append(result)
+    
+    def add_vector_result(self, result: VectorResult):
+        """Добавление результата многофакторной проверки"""
+        self.vector_results.append(result)
+        # Для обратной совместимости добавляем как ScanResult
+        scan_result = ScanResult(
+            result.vector_id, 
+            result.vector_name, 
+            result.vulnerable,
+            f"Confidence: {result.confidence:.1f}% ({result.checks_passed}/{result.checks_total} checks)",
+            result.severity
+        )
+        self.all_checks_performed.append(scan_result)
     
     def add_check_performed(self, result: ScanResult):
         """Добавление информации о выполненной проверке (включая неуязвимые)"""
@@ -64,29 +125,67 @@ class ResultAggregator:
     
     def get_vulnerable_count(self) -> int:
         """Количество найденных уязвимостей"""
-        return sum(1 for r in self.results if r.vulnerable)
+        count = sum(1 for r in self.results if r.vulnerable)
+        count += sum(1 for r in self.vector_results if r.vulnerable)
+        return count
     
     def get_severity_counts(self) -> Dict[str, int]:
         """Подсчет уязвимостей по severity"""
         counts = defaultdict(int)
+        
+        # Legacy results
         for result in self.results:
             if result.vulnerable:
                 counts[result.severity] += 1
+        
+        # New multifactor results
+        for result in self.vector_results:
+            if result.vulnerable:
+                counts[result.severity] += 1
+        
         return dict(counts)
     
-    def get_vulnerabilities(self) -> List[ScanResult]:
-        """Получение всех уязвимостей"""
-        return [r for r in self.results if r.vulnerable]
-    
-    def get_vulnerabilities_by_severity(self, severity: str) -> List[ScanResult]:
+    def get_vulnerabilities(self) -> List[Any]:
+        """Получение всех найденных уязвимостей"""
+        vulnerabilities = []
+        
+        # Legacy vulnerabilities (single check)
+        for result in self.results:
+            if result.vulnerable:
+                vulnerabilities.append(result)
+        
+        # New multifactor vulnerabilities
+        for result in self.vector_results:
+            if result.vulnerable:
+                vulnerabilities.append(result)
+        
+        return vulnerabilities
+
+    def get_vulnerabilities_multifactor(self) -> List[VectorResult]:
+        """Получение только многофакторных уязвимостей"""
+        return [result for result in self.vector_results if result.vulnerable]
+
+    def get_vulnerabilities_by_severity(self, severity: str) -> List[Any]:
         """Получение уязвимостей по severity"""
-        return [r for r in self.results if r.vulnerable and r.severity == severity]
-    
-    def get_critical_vulnerabilities(self) -> List[ScanResult]:
+        vulnerabilities = []
+        
+        # Legacy vulnerabilities
+        for result in self.results:
+            if result.vulnerable and result.severity == severity:
+                vulnerabilities.append(result)
+        
+        # New multifactor vulnerabilities
+        for result in self.vector_results:
+            if result.vulnerable and result.severity == severity:
+                vulnerabilities.append(result)
+        
+        return vulnerabilities
+
+    def get_critical_vulnerabilities(self) -> List[Any]:
         """Получение критических уязвимостей"""
         return self.get_vulnerabilities_by_severity("CRITICAL")
     
-    def get_high_vulnerabilities(self) -> List[ScanResult]:
+    def get_high_vulnerabilities(self) -> List[Any]:
         """Получение высоких уязвимостей"""
         return self.get_vulnerabilities_by_severity("HIGH")
     

@@ -169,7 +169,7 @@ def get_additional_vectors() -> Dict[int, Dict[str, Any]]:
             "category": category,
             "name": name,
             "description": description,
-            "check_function": check_func,
+            "check_functions": [check_func],  # Single check for now
             "requires_adb": False,
             "requires_network": True,
             "priority": 1,
@@ -179,6 +179,7 @@ def get_additional_vectors() -> Dict[int, Dict[str, Any]]:
             "weights": None,
             "confirmed_threshold": 0.7,
             "inconclusive_threshold": 0.4,
+            "check_count": 1,  # Single check for now
         }
 
     return vectors

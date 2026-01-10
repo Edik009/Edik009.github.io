@@ -121,7 +121,7 @@ def get_behavioral_vectors() -> Dict[int, Dict[str, Any]]:
             "category": "H",
             "name": name,
             "description": f"Behavioral analysis: {name}",
-            "check_function": f"check_vector_{vector_id}",
+            "check_functions": [f"check_vector_{vector_id}"],
             "requires_adb": False,
             "requires_network": True,
             "priority": 4,
@@ -136,6 +136,7 @@ def get_behavioral_vectors() -> Dict[int, Dict[str, Any]]:
             },
             "confirmed_threshold": 0.65,
             "inconclusive_threshold": 0.35,
+            "check_count": 1,  # Single check for now
         }
 
     return vectors

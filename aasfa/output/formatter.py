@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 from typing import List
 
-from ..core.result_aggregator import ScanResult, ResultAggregator
+from ..core.result_aggregator import ScanResult, VectorResult, ResultAggregator
 from ..utils.config import COLORS
 
 
@@ -74,7 +74,22 @@ class OutputFormatter:
     def format_summary(aggregator: ResultAggregator) -> str:
         """Форматирование итоговой сводки - MSF style"""
         summary = aggregator.get_summary()
-        vulns = sorted(aggregator.get_vulnerabilities(), key=lambda r: (r.severity, r.vector_id))
+        
+        # Separate legacy and multifactor vulnerabilities
+        legacy_vulns = []
+        multifactor_vulns = []
+        
+        for vuln in aggregator.get_vulnerabilities():
+            if isinstance(vuln, VectorResult):
+                multifactor_vulns.append(vuln)
+            else:
+                legacy_vulns.append(vuln)
+
+        # Sort multifactor vulnerabilities by severity first, then by vector ID
+        multifactor_vulns.sort(key=lambda v: (v.severity, v.vector_id))
+        
+        # Sort legacy vulnerabilities by severity first, then by vector ID  
+        legacy_vulns.sort(key=lambda v: (v.severity, v.vector_id))
 
         risk_score = aggregator.get_risk_score()
         risk_level = "LOW"
@@ -94,14 +109,21 @@ class OutputFormatter:
 
         output += f"Vulnerabilities found: {summary['vulnerabilities_found']}\n\n"
 
-        if vulns:
-            for v in vulns:
-                output += f"[*] VECTOR_{v.vector_id:03d}: {v.vector_name} [{v.severity}]\n"
-                output += f"    Evidence:\n"
-                for evidence in v.details.split("; "):
-                    output += f"    - {evidence}\n"
-                output += "\n"
-        else:
+        # Show multifactor vulnerabilities first (new format)
+        if multifactor_vulns:
+            output += "[+] MULTIFACTOR VULNERABILITIES:\n\n"
+            for vuln in multifactor_vulns:
+                output += f"[+] {vuln.vector_id:03d}. {vuln.vector_name} [{vuln.severity}] ({vuln.confidence:.1f}% confidence)\n"
+                output += vuln.format_details() + "\n\n"
+
+        # Show legacy vulnerabilities (old format for compatibility)
+        if legacy_vulns:
+            output += "[+] LEGACY VULNERABILITIES:\n\n"
+            for vuln in legacy_vulns:
+                output += f"[+] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name} [{vuln.severity}]\n"
+                output += f"    {vuln.details}\n\n"
+
+        if not multifactor_vulns and not legacy_vulns:
             output += "No vulnerabilities found during this scan.\n\n"
 
         output += f"Risk Score: {risk_score}/100 [{risk_level}]\n\n"
@@ -120,10 +142,18 @@ class OutputFormatter:
         output += "=" * 70 + "\n\n"
 
         for vuln in vulnerabilities:
-            output += f"[{vuln.severity}] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name}\n"
-            output += f"Evidence:\n"
-            for evidence in vuln.details.split("; "):
-                output += f"    - {evidence}\n"
-            output += "\n"
+            if isinstance(vuln, VectorResult):
+                # Multifactor vulnerability format
+                output += f"[{vuln.severity}] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name}\n"
+                output += f"Confidence: {vuln.confidence:.1f}% ({vuln.checks_passed}/{vuln.checks_total} checks passed)\n"
+                output += f"Evidence:\n"
+                output += vuln.format_details() + "\n\n"
+            else:
+                # Legacy vulnerability format
+                output += f"[{vuln.severity}] VECTOR_{vuln.vector_id:03d}: {vuln.vector_name}\n"
+                output += f"Evidence:\n"
+                for evidence in vuln.details.split("; "):
+                    output += f"    - {evidence}\n"
+                output += "\n"
 
         return output

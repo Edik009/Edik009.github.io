@@ -185,7 +185,7 @@ def get_ai_system_vectors() -> Dict[int, Dict[str, Any]]:
             "category": "J",
             "name": name,
             "description": f"AI/System Intelligence analysis: {name}",
-            "check_function": f"check_vector_{vector_id}",
+            "check_functions": [f"check_vector_{vector_id}"],
             "requires_adb": False,
             "requires_network": True,
             "priority": 4,
@@ -200,6 +200,7 @@ def get_ai_system_vectors() -> Dict[int, Dict[str, Any]]:
             },
             "confirmed_threshold": 0.7,
             "inconclusive_threshold": 0.4,
+            "check_count": 1,  # Single check for now
         }
 
     return vectors

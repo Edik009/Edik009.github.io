@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict
 
 from .logical_analyzer import LogicalAnalyzer
-from .result_aggregator import ResultAggregator, ScanResult
+from .result_aggregator import ResultAggregator, ScanResult, VectorResult  # NEW: VectorResult import
 from .vector_registry import Vector, VectorRegistry
 from ..output.formatter import OutputFormatter
 from ..output.progress_bar import ProgressBar
@@ -46,64 +46,94 @@ class ScannerEngine:
         if self.debug_level >= level:
             print(f"[DEBUG] {message}")
 
-    def _execute_check(self, vector: Vector) -> ScanResult:
-        """Выполнение одной проверки.
+    def _execute_check(self, vector: Vector) -> VectorResult:
+        """Выполнение многофакторной проверки вектора.
 
-        Важно: функция не должна "висеть" бесконечно. Все сетевые операции должны
-        использовать socket timeouts. Здесь мы добавляем дополнительную защиту:
-        - корректная обработка TimeoutError
-        - передача port_scan_timeout в checks (если check поддерживает параметр)
+        Каждый вектор имеет список check_functions.
+        Выполняем все проверки и вычисляем confidence score.
         """
         if self.shutdown_requested:
-            return ScanResult(vector.id, vector.name, False, "Skipped: shutdown requested", "INFO")
+            return VectorResult(vector.id, vector.name, 0, len(vector.check_functions), 0.0, False, ["Skipped: shutdown requested"], "INFO")
 
-        try:
-            check_fn = self._load_check_module(vector.check_function)
-            if not check_fn:
-                return ScanResult(vector.id, vector.name, False, "Check function not implemented", "INFO")
+        checks_passed = 0
+        checks_results = []
 
-            result: Any
-            # Optional kwargs for backward-compatible check evolution
-            kwargs: Dict[str, Any] = {}
+        for check_func_name in vector.check_functions:
             try:
-                sig = inspect.signature(check_fn)
-                if "port_scan_timeout" in sig.parameters:
-                    kwargs["port_scan_timeout"] = self.config.port_scan_timeout
-                if "debug_level" in sig.parameters:
-                    kwargs["debug_level"] = self.debug_level
-                if "config" in sig.parameters:
-                    kwargs["config"] = self.config
-            except (TypeError, ValueError):
-                kwargs = {}
+                check_fn = self._load_check_module(check_func_name)
+                if not check_fn:
+                    checks_results.append(f"✗ Check function not implemented: {check_func_name}")
+                    continue
 
-            try:
-                if kwargs:
-                    result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout, **kwargs)
+                # Выполняем проверку
+                result: Any
+                kwargs: Dict[str, Any] = {}
+                try:
+                    sig = inspect.signature(check_fn)
+                    if "port_scan_timeout" in sig.parameters:
+                        kwargs["port_scan_timeout"] = self.config.port_scan_timeout
+                    if "debug_level" in sig.parameters:
+                        kwargs["debug_level"] = self.debug_level
+                    if "config" in sig.parameters:
+                        kwargs["config"] = self.config
+                except (TypeError, ValueError):
+                    kwargs = {}
+
+                try:
+                    if kwargs:
+                        result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout, **kwargs)
+                    else:
+                        result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout)
+                except TypeError:
+                    # Some checks may accept config as 4th positional arg
+                    result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout, self.config)
+
+                if not isinstance(result, dict):
+                    checks_results.append(f"✗ Invalid check result: {check_func_name}")
+                    continue
+
+                vulnerable = bool(result.get("vulnerable", False))
+                details = str(result.get("details", "No details"))
+                
+                if vulnerable:
+                    checks_passed += 1
+                    checks_results.append(f"✓ {details}")
                 else:
-                    result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout)
-            except TypeError:
-                # Some checks may accept config as 4th positional arg
-                result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout, self.config)
+                    checks_results.append(f"✗ {details}")
 
-            if not isinstance(result, dict):
-                return ScanResult(vector.id, vector.name, False, "Error: invalid check result", "INFO")
+            except (concurrent.futures.TimeoutError, TimeoutError):
+                checks_results.append(f"✗ Timeout: {check_func_name} exceeded time limit")
 
-            vulnerable = bool(result.get("vulnerable", False))
-            details = str(result.get("details", "No details"))
-            severity = str(result.get("severity", "INFO"))
+            except Exception as e:
+                self.logger.debug(f"Error executing {check_func_name}: {e}")
+                checks_results.append(f"✗ Error: {str(e)}")
 
-            return ScanResult(vector.id, vector.name, vulnerable, details, severity)
+        # Вычисляем confidence score
+        total_checks = len(vector.check_functions)
+        confidence = (checks_passed / total_checks) * 100 if total_checks > 0 else 0.0
+        
+        # Вектор считается vulnerable, если confidence >= 1% (даже одна проверка прошла)
+        vulnerable = confidence >= 1.0
 
-        except (concurrent.futures.TimeoutError, TimeoutError):
-            return ScanResult(vector.id, vector.name, False, "Timeout: check exceeded time limit", "INFO")
-
-        except Exception as e:
-            self.logger.debug(f"Error executing {vector.name}: {e}")
-            return ScanResult(vector.id, vector.name, False, f"Error: {str(e)}", "INFO")
+        return VectorResult(
+            vector_id=vector.id,
+            vector_name=vector.name,
+            checks_passed=checks_passed,
+            checks_total=total_checks,
+            confidence=confidence,
+            vulnerable=vulnerable,
+            details=checks_results,
+            severity=vector.severity
+        )
 
     def _load_check_module(self, check_function: str):
         """Динамическая загрузка функции проверки"""
         try:
+            # NEW: Multifactor checks first (1001-1030)
+            multifactor_module = importlib.import_module("aasfa.checks.multifactor_checks")
+            if hasattr(multifactor_module, check_function):
+                return getattr(multifactor_module, check_function)
+
             # Try deep network checks first (vectors 901-1200)
             if check_function.startswith("check_vector_"):
                 module = importlib.import_module("aasfa.checks.deep_network_checks")
@@ -418,8 +448,7 @@ class ScannerEngine:
         self.debug_log(1, "Filtering vectors...")
         vectors_to_scan = self.registry.filter_vectors(self.config)
 
-        # Skip ADB vectors - network-only analysis
-        vectors_to_scan = [v for v in vectors_to_scan if not v.requires_adb]
+        # ADB vectors already removed - all remaining vectors are network-only
 
         sorted_vectors = self.analyzer.get_execution_order(vectors_to_scan)
         total_vectors = len(sorted_vectors)
