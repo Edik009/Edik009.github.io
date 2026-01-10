@@ -18,6 +18,8 @@ from ..vectors.supply_chain_exotic import get_supply_chain_vectors
 from ..vectors.additional_vectors import get_additional_vectors
 from ..vectors.multifactor_vectors import get_multifactor_vectors
 from ..vectors.side_channel_vectors import get_side_channel_vectors
+from ..vectors.android_comprehensive_vectors import get_all_comprehensive_vectors
+from ..vectors.android_ultra_vectors import get_all_ultra_vectors
 
 
 @dataclass
@@ -39,6 +41,10 @@ class Vector:
     confirmed_threshold: float = 0.7
     inconclusive_threshold: float = 0.4
     check_count: int = 1  # сколько независимых проверок нужно
+    cvss_score: float = 0.0  # NEW: CVSS score
+    exploitation_difficulty: str = "Medium"  # NEW: exploitation difficulty
+    remediation: str = ""  # NEW: remediation advice
+    references: List[str] = None  # NEW: references
 
     def to_dict(self) -> Dict[str, Any]:
         """Конвертация в словарь"""
@@ -59,6 +65,10 @@ class Vector:
             "confirmed_threshold": self.confirmed_threshold,
             "inconclusive_threshold": self.inconclusive_threshold,
             "check_count": self.check_count,
+            "cvss_score": self.cvss_score,
+            "exploitation_difficulty": self.exploitation_difficulty,
+            "remediation": self.remediation,
+            "references": self.references or [],
         }
 
 
@@ -86,6 +96,8 @@ class VectorRegistry:
         all_vectors.update(get_additional_vectors())
         all_vectors.update(get_multifactor_vectors())  # NEW: 30 multifactor vectors (1001-1030)
         all_vectors.update(get_side_channel_vectors())  # NEW: 50 side-channel vectors (101-200)
+        all_vectors.update(get_all_comprehensive_vectors())  # NEW: 150+ comprehensive Android vectors (2000-3999)
+        all_vectors.update(get_all_ultra_vectors())  # NEW: 60+ ultra-advanced vectors (4000-4999)
 
         seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
