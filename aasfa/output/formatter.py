@@ -1,21 +1,8 @@
-"""Output formatter for console output.
+"""Clean Output Formatter - Plain text without ANSI codes or emojis"""
 
-v3.0 formatting requirements (MSF-style):
-- No timestamps in console
-- ASCII header with legal disclaimers
-- Unified result symbols: [+] confirmed, [*] info, [!] warning
-- Summary with Risk Score
-- Mandatory assessment-only disclaimer
-- Only show CONFIRMED results
-"""
-
-from __future__ import annotations
-
-import sys
 from typing import List
 
 from ..core.result_aggregator import ScanResult, VectorResult, ResultAggregator
-from ..utils.config import COLORS
 
 
 ASSESSMENT_ONLY_DISCLAIMER = (
@@ -24,32 +11,44 @@ ASSESSMENT_ONLY_DISCLAIMER = (
 )
 
 
-def _use_colors() -> bool:
-    return sys.stdout.isatty()
-
-
-def _c(key: str) -> str:
-    if not _use_colors():
-        return ""
-    return COLORS.get(key, "")
-
-
 class OutputFormatter:
-    """Форматтер вывода"""
+    """Clean text formatter without special characters"""
 
     @staticmethod
     def format_header() -> str:
-        """Форматирование заголовка - MSF style"""
-        return (
-            f"{_c('BOLD')}"
-            "╔═══════════════════════════════════════════════════════════════╗\n"
-            "║          AASFA Scanner v4.0 - Feasibility Assessment      ║\n"
-            "║              Complete Attack Surface Analysis              ║\n"
-            "║                                                               ║\n"
-            "║ Scanner performs feasibility assessment only and does not    ║\n"
-            "║ exploit vulnerabilities. Remote analysis only, no USB/ADB.   ║\n"
-            "╚═══════════════════════════════════════════════════════════════╝{_c('RESET')}\n"
-        )
+        """Format clean header without ANSI codes"""
+        return """====================================================================
+                    AASFA SCANNER v5.0
+         Universal Security Assessment & Analysis System
+====================================================================
+WARNING: This tool performs security assessment only.
+         No actual exploitation is performed.
+         For authorized testing purposes only.
+====================================================================
+
+"""
+
+    @staticmethod
+    def format_result_line(vector_id: int, vector_name: str, *, status: str, severity: str | None = None) -> str:
+        """Format a single result line with plain text symbols"""
+        symbol = f"[{status}]"
+        if severity:
+            return f"{symbol} VECTOR_{vector_id:03d}: {vector_name} [{severity}]"
+        return f"{symbol} VECTOR_{vector_id:03d}: {vector_name}"
+
+    @staticmethod
+    def format_scan_context(target: str, mode: str, total_checks: int) -> str:
+        """Format scan context information"""
+        return f"""
+Scan Configuration
+====================================================================
+Target:        {target}
+Mode:          {mode}
+Total Vectors: {total_checks}
+
+Starting scan...
+
+"""
 
     @staticmethod
     def format_scan_context(target: str, mode: str, total_checks: int) -> str:
