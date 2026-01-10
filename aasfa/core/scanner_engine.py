@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import importlib
+import inspect
 import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict
@@ -45,23 +47,46 @@ class ScannerEngine:
             print(f"[DEBUG] {message}")
 
     def _execute_check(self, vector: Vector) -> ScanResult:
-        """Выполнение одной проверки"""
-        try:
-            check_module = self._load_check_module(vector.check_function)
-            if not check_module:
-                return ScanResult(
-                    vector.id,
-                    vector.name,
-                    False,
-                    "Check function not implemented",
-                    "INFO",
-                )
+        """Выполнение одной проверки.
 
-            result = check_module(
-                self.config.target_ip,
-                self.config.adb_port,
-                self.config.timeout,
-            )
+        Важно: функция не должна "висеть" бесконечно. Все сетевые операции должны
+        использовать socket timeouts. Здесь мы добавляем дополнительную защиту:
+        - корректная обработка TimeoutError
+        - передача port_scan_timeout в checks (если check поддерживает параметр)
+        """
+        if self.shutdown_requested:
+            return ScanResult(vector.id, vector.name, False, "Skipped: shutdown requested", "INFO")
+
+        try:
+            check_fn = self._load_check_module(vector.check_function)
+            if not check_fn:
+                return ScanResult(vector.id, vector.name, False, "Check function not implemented", "INFO")
+
+            result: Any
+            # Optional kwargs for backward-compatible check evolution
+            kwargs: Dict[str, Any] = {}
+            try:
+                sig = inspect.signature(check_fn)
+                if "port_scan_timeout" in sig.parameters:
+                    kwargs["port_scan_timeout"] = self.config.port_scan_timeout
+                if "debug_level" in sig.parameters:
+                    kwargs["debug_level"] = self.debug_level
+                if "config" in sig.parameters:
+                    kwargs["config"] = self.config
+            except (TypeError, ValueError):
+                kwargs = {}
+
+            try:
+                if kwargs:
+                    result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout, **kwargs)
+                else:
+                    result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout)
+            except TypeError:
+                # Some checks may accept config as 4th positional arg
+                result = check_fn(self.config.target_ip, self.config.adb_port, self.config.timeout, self.config)
+
+            if not isinstance(result, dict):
+                return ScanResult(vector.id, vector.name, False, "Error: invalid check result", "INFO")
 
             vulnerable = bool(result.get("vulnerable", False))
             details = str(result.get("details", "No details"))
@@ -69,15 +94,12 @@ class ScannerEngine:
 
             return ScanResult(vector.id, vector.name, vulnerable, details, severity)
 
+        except (concurrent.futures.TimeoutError, TimeoutError):
+            return ScanResult(vector.id, vector.name, False, "Timeout: check exceeded time limit", "INFO")
+
         except Exception as e:
             self.logger.debug(f"Error executing {vector.name}: {e}")
-            return ScanResult(
-                vector.id,
-                vector.name,
-                False,
-                f"Error: {str(e)}",
-                "INFO",
-            )
+            return ScanResult(vector.id, vector.name, False, f"Error: {str(e)}", "INFO")
 
     def _load_check_module(self, check_function: str):
         """Динамическая загрузка функции проверки"""
@@ -231,12 +253,19 @@ class ScannerEngine:
                 "check_rdp_availability": ("aasfa.checks.network_checks", "check_rdp_availability"),
                 "check_ssh_open": ("aasfa.checks.network_checks", "check_ssh_open"),
                 "check_telnet_presence": ("aasfa.checks.network_checks", "check_telnet_presence"),
+                "check_adb_over_tcp_network": ("aasfa.checks.network_checks", "check_adb_over_tcp_network"),
                 "check_upnp_exposure": ("aasfa.checks.network_checks", "check_upnp_exposure"),
                 "check_mdns_exposure": ("aasfa.checks.network_checks", "check_mdns_exposure"),
                 "check_http_admin_panels": ("aasfa.checks.network_checks", "check_http_admin_panels"),
                 "check_https_without_hsts": ("aasfa.checks.network_checks", "check_https_without_hsts"),
                 "check_ftp_anonymous": ("aasfa.checks.network_checks", "check_ftp_anonymous"),
                 "check_mqtt_exposure": ("aasfa.checks.network_checks", "check_mqtt_exposure"),
+                "check_rtsp_exposure": ("aasfa.checks.network_checks", "check_rtsp_exposure"),
+                "check_websocket_unauth": ("aasfa.checks.network_checks", "check_websocket_unauth"),
+                "check_tftp_read_access": ("aasfa.checks.network_checks", "check_tftp_read_access"),
+                "check_sip_exposure": ("aasfa.checks.network_checks", "check_sip_exposure"),
+                "check_snmp_open_community": ("aasfa.checks.network_checks", "check_snmp_open_community"),
+                "check_dlna_exposure": ("aasfa.checks.network_checks", "check_dlna_exposure"),
             }
 
             if check_function in module_map:
@@ -280,6 +309,100 @@ class ScannerEngine:
 
         return ""
 
+    def _execute_check_with_timeout(self, vector: Vector) -> ScanResult:
+        """Wrapper for executor submission.
+
+        Note: ThreadPoolExecutor cannot forcibly stop a stuck thread.
+        This wrapper is used so we can evolve additional safeguards in one place.
+        """
+        return self._execute_check(vector)
+
+    def _handle_completed_vector(self, vector: Vector, result: ScanResult, pending: list[Vector], completed_count: int) -> int:
+        # Track all checks performed
+        self.aggregator.add_check_performed(result)
+
+        # Only process vulnerable results for display and aggregation
+        if result.vulnerable:
+            self.aggregator.add_result(result)
+            live_line = self._format_live_line(vector, result)
+            if live_line:
+                self.progress_bar.write_line(live_line)
+
+        self.analyzer.mark_completed(vector.id, self._dependency_satisfied(vector, result))
+
+        if vector in pending:
+            pending.remove(vector)
+
+        completed_count += 1
+        self.progress_bar.update(completed_count)
+        return completed_count
+
+    def _process_priority_batch(self, executor: ThreadPoolExecutor, batch: list[Vector], completed_count: int) -> int:
+        pending = batch.copy()
+
+        while pending and not self.shutdown_requested:
+            ready_vectors = self.analyzer.get_next_vectors(pending)
+
+            if not ready_vectors:
+                for vector in pending[:]:
+                    skipped = ScanResult(
+                        vector.id,
+                        vector.name,
+                        False,
+                        f"Skipped: unmet dependencies {vector.depends_on}",
+                        "INFO",
+                    )
+                    completed_count = self._handle_completed_vector(vector, skipped, pending, completed_count)
+                break
+
+            batch_size = min(len(ready_vectors), self.config.threads * 2)
+            work = ready_vectors[:batch_size]
+
+            futures: dict[concurrent.futures.Future[ScanResult], Vector] = {}
+            processed: set[concurrent.futures.Future[ScanResult]] = set()
+
+            for vector in work:
+                self.debug_log(2, f"Submitting VECTOR_{vector.id:03d} to executor")
+                futures[executor.submit(self._execute_check_with_timeout, vector)] = vector
+
+            try:
+                for future in as_completed(futures, timeout=self.config.thread_timeout):
+                    processed.add(future)
+                    vector = futures[future]
+
+                    try:
+                        result = future.result(timeout=0)
+                    except Exception as e:
+                        result = ScanResult(vector.id, vector.name, False, f"Error: {e}", "INFO")
+
+                    completed_count = self._handle_completed_vector(vector, result, pending, completed_count)
+
+            except concurrent.futures.TimeoutError:
+                # Some futures did not complete in time. Process finished ones first,
+                # then mark the rest as timed out.
+                for future, vector in list(futures.items()):
+                    if future in processed:
+                        continue
+
+                    if future.done():
+                        try:
+                            result = future.result(timeout=0)
+                        except Exception as e:
+                            result = ScanResult(vector.id, vector.name, False, f"Error: {e}", "INFO")
+                    else:
+                        future.cancel()
+                        result = ScanResult(
+                            vector.id,
+                            vector.name,
+                            False,
+                            "Timeout: check exceeded time limit",
+                            "INFO",
+                        )
+
+                    completed_count = self._handle_completed_vector(vector, result, pending, completed_count)
+
+        return completed_count
+
     def scan(self) -> ResultAggregator:
         """Запуск сканирования"""
 
@@ -312,74 +435,24 @@ class ScannerEngine:
         # STAGE 5: Creating thread pool
         self.debug_log(1, f"Creating thread pool ({self.config.threads} workers)")
 
+        # Split by priority for predictable fast start
+        priority_1 = [v for v in sorted_vectors if v.priority == 1]
+        priority_2 = [v for v in sorted_vectors if v.priority == 2]
+        priority_3 = [v for v in sorted_vectors if v.priority >= 3]
+
         with ThreadPoolExecutor(max_workers=self.config.threads) as executor:
-            pending = sorted_vectors.copy()
             completed_count = 0
 
-            # STAGE 6: Submitting tasks to executor
-            self.debug_log(1, f"Submitting {len(sorted_vectors)} vectors to executor")
-
-            # STAGE 7: Processing results
-            self.debug_log(1, "Processing results...")
-
-            while pending and not self.shutdown_requested:
-                ready_vectors = self.analyzer.get_next_vectors(pending)
-
-                if not ready_vectors:
-                    for vector in pending[:]:
-                        skipped = ScanResult(
-                            vector.id,
-                            vector.name,
-                            False,
-                            f"Skipped: unmet dependencies {vector.depends_on}",
-                            "INFO",
-                        )
-                        self.aggregator.add_result(skipped)
-                        self.analyzer.mark_completed(vector.id, False)
-                        completed_count += 1
-                        self.progress_bar.current = completed_count
-                        self.progress_bar.write_line(self._format_live_line(vector, skipped))
-                        pending.remove(vector)
+            # STAGE 6/7: Processing results in priority batches with timeouts
+            for batch in (priority_1, priority_2, priority_3):
+                if self.shutdown_requested:
                     break
+                if not batch:
+                    continue
 
-                batch_size = min(len(ready_vectors), self.config.threads * 2)
-                batch = ready_vectors[:batch_size]
-
-                futures = {}
-                for vector in batch:
-                    self.debug_log(2, f"Submitting VECTOR_{vector.id:03d} to executor")
-                    futures[executor.submit(self._execute_check, vector)] = vector
-
-                for future in as_completed(futures):
-                    vector = futures[future]
-
-                    try:
-                        result = future.result(timeout=self.config.timeout)
-                    except Exception as e:
-                        result = ScanResult(vector.id, vector.name, False, f"Error: {e}", "INFO")
-
-                    # Debug log for level 2
-                    status = "CONFIRMED" if result.vulnerable else "NOT_FOUND"
-                    self.debug_log(2, f"Future completed: VECTOR_{vector.id:03d} → {status}")
-
-                    # Track all checks performed
-                    self.aggregator.add_check_performed(result)
-
-                    # Only process vulnerable results for display and aggregation
-                    if result.vulnerable:
-                        self.aggregator.add_result(result)
-                        # Display vulnerabilities in live output
-                        live_line = self._format_live_line(vector, result)
-                        if live_line:
-                            self.progress_bar.write_line(live_line)
-
-                    self.analyzer.mark_completed(vector.id, self._dependency_satisfied(vector, result))
-
-                    completed_count += 1
-                    self.progress_bar.current = completed_count
-
-                    if vector in pending:
-                        pending.remove(vector)
+                batch_prio = batch[0].priority if batch else 0
+                self.debug_log(1, f"Processing priority batch {batch_prio} ({len(batch)} vectors)")
+                completed_count = self._process_priority_batch(executor, batch, completed_count)
 
         self.progress_bar.finish()
         self.aggregator.finish()

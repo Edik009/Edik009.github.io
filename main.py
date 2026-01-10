@@ -70,6 +70,20 @@ Remote analysis only, no USB/ADB required.
     )
 
     parser.add_argument(
+        '--thread-timeout',
+        type=int,
+        default=10,
+        help='Per-vector timeout inside thread pool in seconds (default: 10)'
+    )
+
+    parser.add_argument(
+        '--port-scan-timeout',
+        type=int,
+        default=2,
+        help='Port scan socket timeout in seconds (default: 2)'
+    )
+
+    parser.add_argument(
         '-d', '--debug',
         action='count',
         default=0,
@@ -93,6 +107,14 @@ def validate_arguments(args) -> bool:
         print(f"[!] Error: Timeout must be at least 1 second")
         return False
 
+    if args.thread_timeout < 1:
+        print(f"[!] Error: Thread timeout must be at least 1 second")
+        return False
+
+    if args.port_scan_timeout < 1:
+        print(f"[!] Error: Port scan timeout must be at least 1 second")
+        return False
+
     return True
 
 
@@ -114,7 +136,9 @@ def main():
         remote_only=True,  # Always remote-only
         timeout=args.timeout,
         threads=args.threads,
-        debug_level=args.debug
+        debug_level=args.debug,
+        thread_timeout=args.thread_timeout,
+        port_scan_timeout=args.port_scan_timeout,
     )
 
     if not config.validate():
