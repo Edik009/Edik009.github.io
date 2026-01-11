@@ -21,6 +21,7 @@ from ..vectors.side_channel_vectors import get_side_channel_vectors
 from ..vectors.android_comprehensive_vectors import get_all_comprehensive_vectors
 from ..vectors.android_ultra_vectors import get_all_ultra_vectors
 from ..vectors.crypto_api_vectors import get_crypto_api_vectors
+from ..vectors.cryptography_vectors import get_cryptography_vectors
 
 
 @dataclass
@@ -100,6 +101,7 @@ class VectorRegistry:
         all_vectors.update(get_all_comprehensive_vectors())  # NEW: 150+ comprehensive Android vectors (2000-3999)
         all_vectors.update(get_all_ultra_vectors())  # NEW: 60+ ultra-advanced vectors (4000-4999)
         all_vectors.update(get_crypto_api_vectors())  # NEW: Crypto+API vectors (5000-5149)
+        all_vectors.update(get_cryptography_vectors())  # NEW: 19 cryptography vectors (201-219)
 
         seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
