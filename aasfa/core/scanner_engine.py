@@ -154,6 +154,16 @@ class ScannerEngine:
             if hasattr(multifactor_module, check_function):
                 return getattr(multifactor_module, check_function)
 
+            # NEW: Crypto checks (5000+ vectors and shared checks)
+            crypto_module = importlib.import_module("aasfa.checks.crypto_checks")
+            if hasattr(crypto_module, check_function):
+                return getattr(crypto_module, check_function)
+
+            # NEW: API checks (5100+ vectors)
+            api_module = importlib.import_module("aasfa.checks.api_checks")
+            if hasattr(api_module, check_function):
+                return getattr(api_module, check_function)
+
             # Try deep network checks first (vectors 901-1200)
             if check_function.startswith("check_vector_"):
                 module = importlib.import_module("aasfa.checks.deep_network_checks")

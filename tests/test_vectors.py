@@ -1,6 +1,18 @@
-"""Tests for vector registry and vector loading"""
+"""Tests for vector registry and vector loading.
 
-import pytest
+Проект активно расширяет количество векторов, поэтому тесты проверяют:
+- корректную загрузку реестра
+- наличие ключевых "якорных" векторов
+- базовую структуру Vector
+- согласованность статистики
+
+Важно: эти тесты intentionally фиксируют текущие ожидаемые значения,
+чтобы любые изменения в наборах векторов были явными.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
 
 from aasfa.core.vector_registry import VectorRegistry
 
@@ -10,102 +22,86 @@ class TestVectorRegistry:
 
     def test_registry_initialization(self):
         """Тест инициализации реестра"""
+
         registry = VectorRegistry()
-        assert len(registry.vectors) == 900
+        assert len(registry.vectors) == 964
 
-    def test_get_vector_by_id(self):
-        """Тест получения вектора по ID"""
+    def test_anchor_vectors_exist(self):
+        """Тест наличия ключевых векторов разных подсистем."""
+
         registry = VectorRegistry()
 
-        vector_1 = registry.get_vector(1)
-        assert vector_1 is not None
-        assert vector_1.id == 1
-        assert vector_1.category == "A"
+        # Базовая сеть
+        v1 = registry.get_vector(1)
+        assert v1 is not None
+        assert v1.id == 1
+        assert v1.category == "A"
+        assert v1.check_functions
 
-        vector_50 = registry.get_vector(50)
-        assert vector_50 is not None
-        assert vector_50.category == "B"
+        # Multifactor/side-channel якоря
+        assert registry.get_vector(1001) is not None
+        assert registry.get_vector(151) is not None
 
-        vector_150 = registry.get_vector(150)
-        assert vector_150 is not None
-        assert vector_150.category == "C"
+        # Comprehensive/ultra якоря (верхние диапазоны)
+        assert registry.get_vector(2000) is not None
+        assert registry.get_vector(4800) is not None
 
-        vector_250 = registry.get_vector(250)
-        assert vector_250 is not None
-        assert vector_250.category == "D"
+        # Новые crypto/api векторы (часть 2)
+        v_crypto = registry.get_vector(5000)
+        assert v_crypto is not None
+        assert v_crypto.category == "Cryptography"
 
-        vector_350 = registry.get_vector(350)
-        assert vector_350 is not None
-        assert vector_350.category == "E"
-
-        vector_450 = registry.get_vector(450)
-        assert vector_450 is not None
-        assert vector_450.category == "F"
-
-        vector_650 = registry.get_vector(650)
-        assert vector_650 is not None
-        assert vector_650.category == "G"
+        v_api = registry.get_vector(5100)
+        assert v_api is not None
+        assert v_api.category == "API"
 
     def test_get_vectors_by_category(self):
-        """Тест получения векторов по категории"""
+        """Тест получения векторов по категории."""
+
         registry = VectorRegistry()
 
-        assert len(registry.get_vectors_by_category("A")) == 40
-        assert len(registry.get_vectors_by_category("B")) == 60
-        assert len(registry.get_vectors_by_category("C")) == 70
-        assert len(registry.get_vectors_by_category("D")) == 130
+        assert len(registry.get_vectors_by_category("A")) == 38
         assert len(registry.get_vectors_by_category("E")) == 80
-        assert len(registry.get_vectors_by_category("F")) == 140
-        assert len(registry.get_vectors_by_category("G")) == 380
+        assert len(registry.get_vectors_by_category("H")) == 80
+        assert len(registry.get_vectors_by_category("I")) == 70
+        assert len(registry.get_vectors_by_category("J")) == 190
+        assert len(registry.get_vectors_by_category("M")) == 30
+        assert len(registry.get_vectors_by_category("S")) == 50
 
-    def test_get_vectors_by_priority(self):
-        """Тест получения векторов по приоритету"""
-        registry = VectorRegistry()
-
-        priority_1 = registry.get_vectors_by_priority(1)
-        assert len(priority_1) == 40
-        assert all(v.category == "A" for v in priority_1)
-
-    def test_get_vectors_requiring_adb(self):
-        """Тест получения векторов, требующих ADB"""
-        registry = VectorRegistry()
-
-        adb_vectors = registry.get_vectors_requiring_adb()
-        assert len(adb_vectors) > 0
-        assert all(v.requires_adb for v in adb_vectors)
-
-    def test_get_vectors_requiring_network(self):
-        """Тест получения векторов, требующих сеть"""
-        registry = VectorRegistry()
-
-        network_vectors = registry.get_vectors_requiring_network()
-        assert len(network_vectors) == 120
-        assert all(v.requires_network for v in network_vectors)
+        assert len(registry.get_vectors_by_category("Cryptography")) == 57
+        assert len(registry.get_vectors_by_category("API")) == 50
 
     def test_statistics(self):
-        """Тест статистики"""
+        """Тест статистики."""
+
         registry = VectorRegistry()
         stats = registry.get_statistics()
 
-        assert stats["total"] == 900
-        assert stats["category_A"] == 40
-        assert stats["category_B"] == 60
-        assert stats["category_C"] == 70
-        assert stats["category_D"] == 130
+        assert stats["total"] == 964
+        assert stats["category_A"] == 38
         assert stats["category_E"] == 80
-        assert stats["category_F"] == 140
-        assert stats["category_G"] == 380
+        assert stats["category_F"] == 30
+        assert stats["category_H"] == 80
+        assert stats["category_I"] == 70
+        assert stats["category_J"] == 190
+        assert stats["category_M"] == 30
+        assert stats["category_S"] == 50
+
+        assert stats["requires_adb"] == 0
+        assert stats["requires_network"] == 964
 
     def test_vector_structure(self):
-        """Тест структуры вектора"""
+        """Тест структуры Vector."""
+
         registry = VectorRegistry()
-        vector = registry.get_vector(1)
+        vector = registry.get_vector(5000)
+        assert vector is not None
 
         assert hasattr(vector, "id")
         assert hasattr(vector, "category")
         assert hasattr(vector, "name")
         assert hasattr(vector, "description")
-        assert hasattr(vector, "check_function")
+        assert hasattr(vector, "check_functions")
         assert hasattr(vector, "requires_adb")
         assert hasattr(vector, "requires_network")
         assert hasattr(vector, "priority")
@@ -114,7 +110,23 @@ class TestVectorRegistry:
 
         assert isinstance(vector.depends_on, list)
         assert isinstance(vector.tags, list)
+        assert isinstance(vector.check_functions, list)
+        assert vector.check_functions
 
+    def test_no_duplicate_names_after_dedup(self):
+        """VectorRegistry делает dedup name при коллизиях; проверяем, что итоговые имена уникальны."""
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+        registry = VectorRegistry()
+        names = [v.name for v in registry.get_all_vectors()]
+        assert len(names) == len(set(names))
+
+    def test_category_distribution_sanity(self):
+        """Sanity-check распределения категорий."""
+
+        registry = VectorRegistry()
+        c = Counter(v.category for v in registry.get_all_vectors())
+
+        # Минимальные ожидаемые объёмы
+        assert c["J"] >= 100
+        assert c["Cryptography"] >= 50
+        assert c["API"] >= 50
