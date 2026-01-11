@@ -28,6 +28,10 @@ from .api_web_service_vectors import (
     get_vector_categories as get_api_categories,
 )
 
+from .cloud_backend_vectors import (
+    get_cloud_backend_vectors,
+)
+
 __all__ = [
     'NetworkSecurityVectors',
     'scan_network_security_vectors', 
@@ -45,4 +49,5 @@ __all__ = [
     'get_app_categories',
     'get_api_vector_count',
     'get_api_categories',
+    'get_cloud_backend_vectors',
 ]
