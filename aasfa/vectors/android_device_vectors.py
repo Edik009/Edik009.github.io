@@ -343,7 +343,7 @@ KNOWN_CVES = {
 
 
 class AndroidDeviceVectors:
-    \"\"\"
+    """
     Класс AndroidDeviceVectors предоставляет полный набор инструментов для аудита безопасности
     Android-устройств через интерфейс ADB. 
     
@@ -360,16 +360,16 @@ class AndroidDeviceVectors:
     - Application Security: анализ установленного ПО и его разрешений.
     - Frameworks & Root: обнаружение Magisk, Xposed, Frida.
     - Data Integrity: фальсификация свойств и системных приложений.
-    \"\"\"
+    """
 
     def __init__(self, config: ScanConfig):
-        \"\"\"
+        """
         Инициализация модуля векторов.
         
         Args:
             config: Объект конфигурации сканирования, содержащий IP адрес цели
                     и другие параметры (порты, таймауты, режимы).
-        \"\"\"
+        """
         self.config = config
         self.target_ip = config.target_ip
         self.adb_port = getattr(config, 'adb_port', 5555)
@@ -393,12 +393,12 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def run_all(self) -> List[Dict[str, Any]]:
-        \"\"\"
+        """
         Запуск всех реализованных векторов по порядку.
         
         Returns:
             List[Dict[str, Any]]: Список результатов для каждого вектора.
-        \"\"\"
+        """
         logger.info(f"Начало полного сканирования Android векторов для {self.target_ip}")
         
         # 0. Предварительное подключение и сбор информации
@@ -458,7 +458,7 @@ class AndroidDeviceVectors:
         return results
 
     def _collect_basic_info(self):
-        \"\"\"Сбор базовой информации об устройстве для использования в векторах\"\"\"
+        """Сбор базовой информации об устройстве для использования в векторах"""
         self.device_info["model"] = self.adb_get_property("ro.product.model")
         self.device_info["version"] = self.adb_get_property("ro.build.version.release")
         self.device_info["security_patch"] = self.adb_get_property("ro.build.version.security_patch")
@@ -478,7 +478,7 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def adb_connect(self, ip: str, port: int = 5555) -> bool:
-        \"\"\"
+        """
         Попытка подключения к устройству через ADB.
         
         Args:
@@ -487,7 +487,7 @@ class AndroidDeviceVectors:
             
         Returns:
             bool: True если подключение успешно, False иначе
-        \"\"\"
+        """
         try:
             logger.info(f"Попытка ADB подключения к {ip}:{port}")
             
@@ -516,7 +516,7 @@ class AndroidDeviceVectors:
             return False
 
     def adb_shell_command(self, command: str) -> Tuple[bool, str]:
-        \"\"\"
+        """
         Выполнение команды в ADB shell.
         
         Args:
@@ -524,7 +524,7 @@ class AndroidDeviceVectors:
             
         Returns:
             Tuple[bool, str]: (статус успеха, вывод команды)
-        \"\"\"
+        """
         if not self.connected and not self.adb_connect(self.target_ip, self.adb_port):
             return False, "ADB not connected"
             
@@ -550,7 +550,7 @@ class AndroidDeviceVectors:
             return False, str(e)
 
     def adb_get_property(self, prop_name: str) -> str:
-        \"\"\"
+        """
         Получение значения системного свойства Android.
         
         Args:
@@ -558,12 +558,12 @@ class AndroidDeviceVectors:
             
         Returns:
             str: Значение свойства или пустая строка в случае ошибки
-        \"\"\"
+        """
         success, output = self.adb_shell_command(f"getprop {prop_name}")
         return output if success else ""
 
     def parse_package_info(self, dumpsys_output: str) -> Dict[str, Any]:
-        \"\"\"
+        """
         Парсинг вывода 'dumpsys package' в структурированный вид.
         
         Args:
@@ -571,7 +571,7 @@ class AndroidDeviceVectors:
             
         Returns:
             Dict[str, Any]: Структурированные данные о пакете
-        \"\"\"
+        """
         info = {
             "package_name": "",
             "version_name": "",
@@ -620,19 +620,19 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def is_known_malware(self, package_name: str) -> bool:
-        \"\"\"Проверка на принадлежность к вредоносному ПО\"\"\"
+        """Проверка на принадлежность к вредоносному ПО"""
         return package_name in MALWARE_PACKAGES
 
     def is_dangerous_permission(self, permission: str) -> bool:
-        \"\"\"Проверка на опасное разрешение\"\"\"
+        """Проверка на опасное разрешение"""
         return permission in DANGEROUS_PERMISSIONS
 
     def is_known_bloatware(self, package_name: str) -> bool:
-        \"\"\"Проверка на принадлежность к bloatware\"\"\"
+        """Проверка на принадлежность к bloatware"""
         return package_name in BLOATWARE_PACKAGES
 
     def get_android_version_name(self, api_level: Union[int, str]) -> str:
-        \"\"\"Получение имени версии Android по API level\"\"\"
+        """Получение имени версии Android по API level"""
         try:
             api = int(api_level)
             versions = {
@@ -657,14 +657,14 @@ class AndroidDeviceVectors:
             return "Unknown"
 
     def parse_security_patch_date(self, date_str: str) -> Optional[datetime]:
-        \"\"\"Парсинг даты патча безопасности (ГГГГ-ММ-ДД)\"\"\"
+        """Парсинг даты патча безопасности (ГГГГ-ММ-ДД)"""
         try:
             return datetime.strptime(date_str, "%Y-%m-%d")
         except:
             return None
 
     def _get_adb_version(self) -> str:
-        \"\"\"Получение версии ADB на хосте\"\"\"
+        """Получение версии ADB на хосте"""
         try:
             result = subprocess.run(["adb", "version"], capture_output=True, text=True)
             match = re.search(r"Android Debug Bridge version ([\d\.]+)", result.stdout)
@@ -678,7 +678,7 @@ class AndroidDeviceVectors:
 
     def _create_result(self, vector_id: int, vector_name: str, vulnerable: bool, 
                        factors: List[Dict[str, Any]], details: str = "") -> Dict[str, Any]:
-        \"\"\"Создание стандартного результата вектора\"\"\"
+        """Создание стандартного результата вектора"""
         passed = sum(1 for f in factors if f["passed"])
         total = len(factors)
         
@@ -698,7 +698,7 @@ class AndroidDeviceVectors:
 
     def _create_error_result(self, vector_id: int, vector_name: str, 
                              factors: List[Dict[str, Any]], error_msg: str) -> Dict[str, Any]:
-        \"\"\"Создание результата при возникновении ошибки\"\"\"
+        """Создание результата при возникновении ошибки"""
         return {
             "vector_id": vector_id,
             "vector_name": vector_name,
@@ -715,10 +715,10 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def check_adb_over_network(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         1.1 Вектор ADB Over Network (Порт 5555)
         Проверка доступности ADB через сеть без физического подключения.
-        \"\"\"
+        """
         vector_id = 101
         vector_name = "ADB Over Network"
         factors = []
@@ -788,10 +788,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_adb_pairing_not_required(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         1.2 Вектор ADB Pairing Not Required
         Проверка возможности выполнения команд без предварительного сопряжения.
-        \"\"\"
+        """
         vector_id = 102
         vector_name = "ADB Pairing Not Required"
         factors = []
@@ -841,10 +841,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_usb_debugging_enabled(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         1.3 Вектор USB Debugging Enabled
         Проверка включенного режима отладки по USB.
-        \"\"\"
+        """
         vector_id = 103
         vector_name = "USB Debugging Enabled"
         factors = []
@@ -896,10 +896,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_adb_unknown_sources_disabled(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         1.4 Вектор ADB Unknown Sources Warning Disabled
         Проверка разрешения установки приложений из неизвестных источников.
-        \"\"\"
+        """
         vector_id = 104
         vector_name = "ADB Unknown Sources Allowed"
         factors = []
@@ -963,10 +963,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_adb_shell_as_root(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         1.5 Вектор ADB Shell as Root
         Проверка наличия прав root в ADB shell.
-        \"\"\"
+        """
         vector_id = 105
         vector_name = "ADB Shell as Root"
         factors = []
@@ -1021,10 +1021,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_verbose_logging_adb(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         1.6 Вектор Verbose Logging via ADB
         Проверка наличия чувствительных данных в системных логах (logcat).
-        \"\"\"
+        """
         vector_id = 106
         vector_name = "Verbose Logging (Sensitive Data)"
         factors = []
@@ -1102,10 +1102,10 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def check_unlocked_bootloader(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         2.1 Вектор Unlocked Bootloader
         Проверка статуса загрузчика устройства.
-        \"\"\"
+        """
         vector_id = 201
         vector_name = "Unlocked Bootloader"
         factors = []
@@ -1162,10 +1162,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_selinux_permissive(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         2.2 Вектор SELinux Disabled or Permissive
         Проверка статуса Security-Enhanced Linux на устройстве.
-        \"\"\"
+        """
         vector_id = 202
         vector_name = "SELinux Disabled or Permissive"
         factors = []
@@ -1222,10 +1222,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_custom_rom_installed(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         2.3 Вектор Custom ROM Installed
         Проверка наличия неофициальной прошивки (Custom ROM).
-        \"\"\"
+        """
         vector_id = 203
         vector_name = "Custom ROM Detected"
         factors = []
@@ -1295,10 +1295,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_unsigned_system_packages(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         2.4 Вектор Unsigned System Packages
         Проверка системных приложений на наличие некорректных подписей.
-        \"\"\"
+        """
         vector_id = 204
         vector_name = "Unsigned/Modified System Packages"
         factors = []
@@ -1357,10 +1357,10 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def check_old_android_version(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         3.1 Вектор Old Android Version
         Проверка использования устаревшей версии Android.
-        \"\"\"
+        """
         vector_id = 301
         vector_name = "Outdated Android Version"
         factors = []
@@ -1430,10 +1430,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_outdated_security_patch(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         3.2 Вектор Outdated Security Patch
         Проверка даты последнего патча безопасности.
-        \"\"\"
+        """
         vector_id = 302
         vector_name = "Outdated Security Patch"
         factors = []
@@ -1503,10 +1503,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_unpatched_known_cve(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         3.3 Вектор Unpatched Known CVE
         Проверка наличия известных уязвимостей для данной версии Android.
-        \"\"\"
+        """
         vector_id = 303
         vector_name = "Known Vulnerabilities (CVE)"
         factors = []
@@ -1569,10 +1569,10 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def check_dangerous_app_permissions(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         4.1 Вектор Dangerous App Permissions
         Анализ разрешений установленных приложений на наличие опасных комбинаций.
-        \"\"\"
+        """
         vector_id = 401
         vector_name = "Dangerous App Permissions"
         factors = []
@@ -1643,10 +1643,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_bloatware_and_malware(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         4.2 Вектор Bloatware and Malware
         Поиск известных вредоносных и рекламных приложений.
-        \"\"\"
+        """
         vector_id = 402
         vector_name = "Bloatware and Malware Detection"
         factors = []
@@ -1697,10 +1697,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_third_party_app_store(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         4.3 Вектор Third-Party App Store Installed
         Обнаружение альтернативных магазинов приложений.
-        \"\"\"
+        """
         vector_id = 403
         vector_name = "Third-Party App Stores"
         factors = []
@@ -1764,10 +1764,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_installed_dev_tools(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         4.4 Вектор Installed Development Tools
         Поиск инструментов разработки и отладки на устройстве.
-        \"\"\"
+        """
         vector_id = 404
         vector_name = "Development Tools Presence"
         factors = []
@@ -1836,10 +1836,10 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def check_backup_enabled(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         5.1 Вектор Backup Enabled
         Проверка включенности резервного копирования данных.
-        \"\"\"
+        """
         vector_id = 501
         vector_name = "Android Backup Enabled"
         factors = []
@@ -1887,10 +1887,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_frp_disabled(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         5.2 Вектор Factory Reset Protection Disabled
         Проверка статуса защиты от сброса к заводским настройкам (FRP).
-        \"\"\"
+        """
         vector_id = 502
         vector_name = "FRP Disabled"
         factors = []
@@ -1938,10 +1938,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_frida_installed(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         5.3 Вектор Frida Framework Installed
         Поиск следов использования Frida для динамического анализа.
-        \"\"\"
+        """
         vector_id = 503
         vector_name = "Frida Framework Detected"
         factors = []
@@ -1994,10 +1994,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_xposed_installed(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         5.4 Вектор Xposed Framework Installed
         Обнаружение Xposed Framework и его модулей.
-        \"\"\"
+        """
         vector_id = 504
         vector_name = "Xposed Framework Detected"
         factors = []
@@ -2043,10 +2043,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_magisk_root_installed(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         5.5 Вектор Magisk Root Installed
         Обнаружение Magisk (самого популярного решения для root прав).
-        \"\"\"
+        """
         vector_id = 505
         vector_name = "Magisk Root Detected"
         factors = []
@@ -2097,10 +2097,10 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def check_falsified_build_props(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         6.1 Вектор Falsified Build Properties
         Проверка на предмет подделки системных свойств устройства.
-        \"\"\"
+        """
         vector_id = 601
         vector_name = "Falsified Build Properties"
         factors = []
@@ -2164,10 +2164,10 @@ class AndroidDeviceVectors:
             return self._create_error_result(vector_id, vector_name, factors, str(e))
 
     def check_modified_system_apps(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         6.2 Вектор Modified System Apps
         Обнаружение модифицированных системных приложений через анализ их характеристик.
-        \"\"\"
+        """
         vector_id = 602
         vector_name = "Modified System Apps"
         factors = []
@@ -2219,12 +2219,12 @@ class AndroidDeviceVectors:
     # ============================================================================
 
     def get_security_summary(self) -> Dict[str, Any]:
-        \"\"\"
+        """
         Генерация краткого резюме по результатам сканирования.
         
         Returns:
             Dict[str, Any]: Сводная статистика и оценка уровня риска.
-        \"\"\"
+        """
         if not self.scan_results:
             return {"status": "No scan data available"}
             
@@ -2253,12 +2253,12 @@ class AndroidDeviceVectors:
         }
 
     def generate_detailed_report(self) -> str:
-        \"\"\"
+        """
         Генерация детального текстового отчета по результатам сканирования.
         
         Returns:
             str: Форматированный текст отчета.
-        \"\"\"
+        """
         summary = self.get_security_summary()
         report = []
         report.append("=" * 60)
@@ -2299,11 +2299,11 @@ class AndroidDeviceVectors:
     
     @staticmethod
     def get_methodology_description() -> str:
-        \"\"\"
+        """
         Возвращает подробное описание методологии сканирования.
         Используется для самодокументирования и обучения.
-        \"\"\"
-        return \"\"\"
+        """
+        return """
         МЕТОДОЛОГИЯ AUDIT ANDROID SECURITY FRAMEWORK (AASFA)
         
         1. ADB OVER NETWORK
@@ -2338,7 +2338,7 @@ class AndroidDeviceVectors:
            Поиск осуществляется по базе имен пакетов, замеченных в сомнительной активности или 
            являющихся предустановленным рекламным мусором от вендоров, который часто имеет 
            избыточные системные права.
-        \"\"\"
+        """
 
 # ============================================================================
 # ДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ ДЛЯ ДОСТИЖЕНИЯ ОБЪЕМА И ПОДРОБНОСТИ
@@ -2426,10 +2426,10 @@ REMEDIATION_GUIDE = {
 }
 
 def get_full_android_security_manual() -> str:
-    \"\"\"
+    """
     Возвращает полное руководство по безопасности Android.
     Содержит рекомендации, описание угроз и лучшие практики.
-    \"\"\"
+    """
     manual = []
     manual.append("ПОЛНОЕ РУКОВОДСТВО ПО БЕЗОПАСНОСТИ ANDROID (2026)")
     manual.append("=" * 60)
@@ -2504,7 +2504,7 @@ GLOSSARY = {
 }
 
 # ПЛАН РАЗВИТИЯ МОДУЛЯ (ROADMAP 2026-2030)
-ROADMAP = \"\"\"
+ROADMAP = """
 1. ИНТЕГРАЦИЯ ИИ (2026)
    - Внедрение локальных LLM моделей для анализа вывода logcat в реальном времени.
    - Автоматическое обнаружение аномального поведения приложений через нейронные сети.
@@ -2524,10 +2524,10 @@ ROADMAP = \"\"\"
 5. КВАНТОВАЯ УСТОЙЧИВОСТЬ (2030)
    - Аудит криптографических библиотек на предмет готовности к постквантовой эпохе.
    - Проверка реализации алгоритмов шифрования нового поколения.
-\"\"\"
+"""
 
 def get_future_security_vision() -> str:
-    \"\"\"Возвращает видение будущего безопасности мобильных устройств\"\"\"
+    """Возвращает видение будущего безопасности мобильных устройств"""
     vision = []
     vision.append("ВИДЕНИЕ БУДУЩЕГО МОБИЛЬНОЙ БЕЗОПАСНОСТИ")
     vision.append("=" * 60)

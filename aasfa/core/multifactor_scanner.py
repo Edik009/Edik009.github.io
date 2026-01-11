@@ -33,16 +33,16 @@ class MultifactorScanner:
     def __init__(self, config: ScanConfig, aggregator: ResultAggregator):
         self.config = config
         self.aggregator = aggregator
-        self.network_connector = network.NetworkConnector(timeout=config.timeout)
-        self.http_connector = http.HttpConnector(timeout=config.timeout)
+        self.network_connector = network.NetworkConnector(host=config.target_ip, timeout=config.timeout)
+        self.http_connector = http.HTTPConnector(host=config.target_ip, port=80, use_ssl=False, timeout=config.timeout)
         self.adb_connector = None
         
         if config.adb_port:
             try:
-                from ..connectors.adb import ADBConnector
+                from ..connectors.adb_connector import ADBConnector
                 self.adb_connector = ADBConnector(config.target_ip, config.adb_port, timeout=config.timeout)
-            except ImportError:
-                pass
+            except Exception:
+                self.adb_connector = None
         
         # New Android Device Vectors module
         self.android_vectors = AndroidDeviceVectors(config)
@@ -136,10 +136,10 @@ class MultifactorScanner:
         
         def check_telnet_banner():
             try:
-                banner = self.network_connector.grab_banner(self.config.target_ip, 23)
+                banner = self.network_connector.get_service_banner(23) or ""
                 has_telnet = 'telnet' in banner.lower() or 'login' in banner.lower()
                 return {'success': has_telnet, 'details': f'Banner: {banner[:100]}'}
-            except:
+            except Exception:
                 return {'success': False, 'details': 'Unable to grab banner'}
         
         def check_authentication_prompt():
@@ -185,10 +185,10 @@ class MultifactorScanner:
         
         def check_ftp_banner():
             try:
-                banner = self.network_connector.grab_banner(self.config.target_ip, 21)
+                banner = self.network_connector.get_service_banner(21) or ""
                 has_ftp = 'ftp' in banner.lower()
                 return {'success': has_ftp, 'details': f'FTP banner: {banner[:100]}'}
-            except:
+            except Exception:
                 return {'success': False, 'details': 'Unable to grab FTP banner'}
         
         def check_anonymous_login():
@@ -243,11 +243,11 @@ class MultifactorScanner:
         
         def check_ssh_version():
             try:
-                banner = self.network_connector.grab_banner(self.config.target_ip, 22)
+                banner = self.network_connector.get_service_banner(22) or ""
                 has_ssh = 'ssh' in banner.lower()
                 version_info = banner.strip()
                 return {'success': has_ssh, 'details': f'SSH version: {version_info[:100]}'}
-            except:
+            except Exception:
                 return {'success': False, 'details': 'Unable to detect SSH version'}
         
         def check_weak_ciphers_available():

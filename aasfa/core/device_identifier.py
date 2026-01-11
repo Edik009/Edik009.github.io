@@ -17,8 +17,8 @@ class DeviceIdentifier:
     
     def __init__(self, config: ScanConfig):
         self.config = config
-        self.network_connector = network.NetworkConnector(timeout=config.timeout)
-        self.http_connector = http.HttpConnector(timeout=config.timeout)
+        self.network_connector = network.NetworkConnector(host=config.target_ip, timeout=config.timeout)
+        self.http_connector = http.HTTPConnector(host=config.target_ip, port=80, use_ssl=False, timeout=config.timeout)
     
     def identify_device(self) -> Dict[str, Any]:
         """Perform real device identification"""
@@ -211,7 +211,7 @@ class DeviceIdentifier:
         info = {}
         
         try:
-            banner = self.network_connector.grab_banner(self.config.target_ip, 22)
+            banner = self.network_connector.get_service_banner(22) or ""
             
             if 'ssh' in banner.lower():
                 info['service_ssh'] = True
@@ -242,7 +242,7 @@ class DeviceIdentifier:
         info = {}
         
         try:
-            banner = self.network_connector.grab_banner(self.config.target_ip, 23)
+            banner = self.network_connector.get_service_banner(23)
             
             if banner:
                 info['service_telnet'] = True
