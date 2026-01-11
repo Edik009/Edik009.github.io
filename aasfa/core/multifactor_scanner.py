@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ..utils.config import ScanConfig
 from ..connectors import network, http, ssh, adb
 from .result_aggregator import ResultAggregator, VectorResult
+from ..vectors.android_device_vectors import AndroidDeviceVectors
 
 
 @dataclass
@@ -42,6 +43,9 @@ class MultifactorScanner:
                 self.adb_connector = ADBConnector(config.target_ip, config.adb_port, timeout=config.timeout)
             except ImportError:
                 pass
+        
+        # New Android Device Vectors module
+        self.android_vectors = AndroidDeviceVectors(config)
     
     def run_multifactor_check(self, vector_id: int, vector_name: str, 
                               vector_type: str, checks: List[MultifactorCheck],
