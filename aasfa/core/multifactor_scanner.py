@@ -15,6 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ..utils.config import ScanConfig
 from ..connectors import network, http, ssh, adb
 from .result_aggregator import ResultAggregator, VectorResult
+from .vector_registry import VectorRegistry
+from .scanner_engine import ScannerEngine
 from ..vectors.android_device_vectors import AndroidDeviceVectors
 
 
@@ -630,68 +632,94 @@ class MultifactorScanner:
 
 
 class VectorScheduler:
-    """Schedule and execute all multifactor vectors"""
-    
+    """Schedule and execute all multifactor vectors using VectorRegistry"""
+
     def __init__(self, scanner: MultifactorScanner, config: ScanConfig):
         self.scanner = scanner
         self.config = config
+        self.registry = VectorRegistry()
+        self.scanner_engine = ScannerEngine(config)
         self.vectors = []
-        self._register_all_vectors()
-    
-    def _register_all_vectors(self):
-        """Register all multifactor vectors"""
-        # Network vectors (850+)
-        self.vectors.extend([
-            (self.scanner.check_open_port_23_telnet, 1),
-            (self.scanner.check_open_port_21_ftp, 2),
-            (self.scanner.check_ssh_weak_ciphers, 3),
-            (self.scanner.check_http_default_page, 4),
-            # 846 more network vectors would be added here
-        ])
-        
-        # Android vectors (2500+)
-        self.vectors.extend([
-            (self.scanner.check_adb_debugging_enabled, 101),
-            (self.scanner.check_android_root_access, 102),
-            # 2498 more Android vectors would be added here
-        ])
-        
-        # Crypto vectors (1600+)
-        self.vectors.extend([
-            (self.scanner.check_weak_ssl_tls, 201),
-            # 1599 more crypto vectors would be added here
-        ])
-        
-        # Side-channel vectors (1200+)
-        self.vectors.extend([
-            (self.scanner.check_timing_side_channel, 301),
-            # 1199 more side-channel vectors would be added here
-        ])
-    
+        self._load_vectors_from_registry()
+
+    def _load_vectors_from_registry(self):
+        """Load all vectors from VectorRegistry instead of hardcoded list"""
+        # Get all vectors from registry
+        all_vectors = self.registry.get_all_vectors()
+
+        # Filter vectors based on configuration
+        filtered_vectors = self.registry.filter_vectors(self.config)
+
+        # Store vectors for execution
+        self.vectors = filtered_vectors
+
+        print(f"Loaded {len(self.vectors)} vectors from VectorRegistry for execution")
+
+    def _create_vector_execution_wrapper(self, vector):
+        """Create a wrapper function to execute a vector's check functions"""
+        def execute_vector():
+            try:
+                # Use ScannerEngine to execute the vector
+                result = self.scanner_engine._execute_check(vector)
+                return result
+            except Exception as e:
+                # Return error result if execution fails
+                return VectorResult(
+                    vector_id=vector.id,
+                    vector_name=vector.name,
+                    checks_passed=0,
+                    checks_total=len(vector.check_functions),
+                    confidence=0.0,
+                    vulnerable=False,
+                    details=[f"Execution error: {str(e)}"],
+                    severity="INFO"
+                )
+
+        return execute_vector
+
     def execute_all(self, aggregator: ResultAggregator) -> ResultAggregator:
-        """Execute all registered vectors"""
-        print(f"Starting multifactor scan of {len(self.vectors)} vectors...\n")
-        
+        """Execute all vectors from VectorRegistry"""
+        if not self.vectors:
+            print("No vectors to execute")
+            return aggregator
+
+        print(f"Starting multifactor scan of {len(self.vectors)} vectors from VectorRegistry...\n")
+
         with ThreadPoolExecutor(max_workers=self.config.threads) as executor:
             future_to_vector = {}
-            
-            for vector_func, vector_id in self.vectors:
-                future = executor.submit(vector_func)
-                future_to_vector[future] = (vector_func, vector_id)
-            
+
+            # Create execution wrappers for all vectors
+            for vector in self.vectors:
+                execution_wrapper = self._create_vector_execution_wrapper(vector)
+                future = executor.submit(execution_wrapper)
+                future_to_vector[future] = vector
+
             completed = 0
             for future in as_completed(future_to_vector):
-                vector_func, vector_id = future_to_vector[future]
+                vector = future_to_vector[future]
                 try:
                     result = future.result(timeout=self.config.thread_timeout)
                     aggregator.add_vector_result(result)
-                    
+
                     completed += 1
-                    print(f"Progress: {completed}/{len(self.vectors)} - VECTOR_{vector_id:03d}", end='\r')
-                    
+                    print(f"Progress: {completed}/{len(self.vectors)} - VECTOR_{vector.id:03d} - {vector.name}", end='\r')
+
                 except Exception as e:
                     completed += 1
-                    print(f"Error scanning VECTOR_{vector_id:03d}: {str(e)}")
-        
+                    print(f"Error scanning VECTOR_{vector.id:03d}: {str(e)}")
+
+                    # Add error result to aggregator
+                    error_result = VectorResult(
+                        vector_id=vector.id,
+                        vector_name=vector.name,
+                        checks_passed=0,
+                        checks_total=len(vector.check_functions),
+                        confidence=0.0,
+                        vulnerable=False,
+                        details=[f"Execution error: {str(e)}"],
+                        severity="INFO"
+                    )
+                    aggregator.add_vector_result(error_result)
+
         print("\nScan completed!\n")
         return aggregator
