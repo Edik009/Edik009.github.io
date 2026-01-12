@@ -9,6 +9,15 @@ from typing import Optional, Dict
 from .base_connector import BaseConnector
 
 
+class HTTPResponse:
+    """Simple HTTP response object with status_code and content attributes"""
+    def __init__(self, status_code: int, content: str, headers: Optional[Dict[str, str]] = None):
+        self.status_code = status_code
+        self.content = content
+        self.text = content
+        self.headers = headers or {}
+
+
 class HTTPConnector(BaseConnector):
     """HTTP/HTTPS коннектор"""
     
@@ -36,7 +45,7 @@ class HTTPConnector(BaseConnector):
         """HTTP не поддерживает команды"""
         return False, "Not supported for HTTP"
     
-    def get(self, path: str, headers: Optional[Dict[str, str]] = None) -> Optional[str]:
+    def get(self, path: str, headers: Optional[Dict[str, str]] = None, timeout: Optional[int] = None) -> Optional[HTTPResponse]:
         """HTTP GET запрос"""
         try:
             url = f"{self.base_url}{path}"
@@ -48,15 +57,23 @@ class HTTPConnector(BaseConnector):
             
             context = ssl._create_unverified_context() if self.use_ssl else None
             
-            with urllib.request.urlopen(req, timeout=self.timeout, context=context) as response:
-                return response.read().decode('utf-8', errors='ignore')
+            # Use provided timeout or fall back to self.timeout
+            request_timeout = timeout or self.timeout
+            
+            with urllib.request.urlopen(req, timeout=request_timeout, context=context) as response:
+                content = response.read().decode('utf-8', errors='ignore')
+                return HTTPResponse(response.status, content, dict(response.headers))
         
         except urllib.error.HTTPError as e:
             self.logger.debug(f"HTTP error {e.code}: {e.reason}")
-            return None
+            return None  # Return None for HTTP errors (like 404, 500, etc.)
         except Exception as e:
             self.logger.debug(f"HTTP request failed: {e}")
             return None
+    
+    def request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None, timeout: Optional[int] = None) -> Optional[HTTPResponse]:
+        """HTTP request with custom method"""
+        return self.get(url, headers, timeout)
     
     def get_headers(self, path: str = "/") -> Optional[Dict[str, str]]:
         """Получение HTTP заголовков"""
