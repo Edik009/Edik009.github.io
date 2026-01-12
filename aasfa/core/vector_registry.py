@@ -23,6 +23,7 @@ from ..vectors.android_ultra_vectors import get_all_ultra_vectors
 from ..vectors.crypto_api_vectors import get_crypto_api_vectors
 from ..vectors.cryptography_vectors import get_cryptography_vectors
 from ..vectors.cloud_backend_vectors import get_cloud_backend_vectors
+from ..vectors.real_security_checks import REAL_SECURITY_VECTORS
 
 
 @dataclass
@@ -104,6 +105,10 @@ class VectorRegistry:
         all_vectors.update(get_crypto_api_vectors())  # NEW: Crypto+API vectors (5000-5149)
         all_vectors.update(get_cryptography_vectors())  # NEW: 19 cryptography vectors (201-219)
         all_vectors.update(get_cloud_backend_vectors())  # NEW: 15 cloud backend vectors (6001-6015)
+        
+        # NEW: Real Security Checks - 35+ vectors with actual implementations
+        from ..vectors.real_security_checks import get_real_security_vectors
+        all_vectors.update(get_real_security_vectors())
 
         seen_names: set[str] = set()
         for vector_id, vector_data in all_vectors.items():
@@ -188,6 +193,12 @@ class VectorRegistry:
             "category_M": len(self.get_vectors_by_category("M")),  # Multifactor vectors
             "category_S": len(self.get_vectors_by_category("S")),  # Side-channel vectors
             "category_CLOUD": len(self.get_vectors_by_category("CLOUD")),  # Cloud & Backend vectors
+            "category_Network": len(self.get_vectors_by_category("Network")),  # Network security vectors
+            "category_Crypto": len(self.get_vectors_by_category("Crypto")),  # Crypto security vectors
+            "category_Android": len(self.get_vectors_by_category("Android")),  # Android security vectors
+            "category_Container": len(self.get_vectors_by_category("Container")),  # Container security vectors
+            "category_Authentication": len(self.get_vectors_by_category("Authentication")),  # Auth vectors
+            "category_Side-Channel": len(self.get_vectors_by_category("Side-Channel")),  # Side-channel vectors
             "requires_adb": len(self.get_vectors_requiring_adb()),
             "requires_network": len(self.get_vectors_requiring_network()),
         }
