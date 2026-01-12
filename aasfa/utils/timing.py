@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import List, Tuple, Any, Optional
 from ..utils.logger import get_logger
 
+_timing_warning_shown = False  # Track if warning was already shown
+
 
 @dataclass
 class TimingStats:
@@ -44,6 +46,8 @@ def collect_timing_samples(target: str, endpoint: str, samples: int = 30, timeou
     
     logger.debug(f"Collecting {samples} timing samples for {target}{endpoint}")
     
+    global _timing_warning_shown
+    
     for i in range(samples):
         try:
             t_start = time.perf_counter()
@@ -56,8 +60,12 @@ def collect_timing_samples(target: str, endpoint: str, samples: int = 30, timeou
             logger.debug(f"Failed to collect sample {i+1}: {e}")
             continue
     
-    if len(rtts) < 5:
-        logger.warning(f"Only {len(rtts)} valid samples collected, analysis may be unreliable")
+    if len(rtts) < 5 and len(rtts) > 0:
+        if not _timing_warning_shown:
+            logger.warning(f"Only {len(rtts)} valid samples collected, analysis may be unreliable")
+            _timing_warning_shown = True
+    elif len(rtts) == 0:
+        logger.debug("No valid timing samples collected (target not responding)")
     
     # Вычислить статистику
     if not rtts:

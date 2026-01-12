@@ -19,10 +19,12 @@ class DeviceIdentifier:
         self.config = config
         self.network_connector = network.NetworkConnector(host=config.target_ip, timeout=config.timeout)
         self.http_connector = http.HTTPConnector(host=config.target_ip, port=80, use_ssl=False, timeout=config.timeout)
+        self.debug = getattr(config, 'debug_level', 0) > 0
     
     def identify_device(self) -> Dict[str, Any]:
         """Perform real device identification"""
-        print("Performing device identification...")
+        if self.debug:
+            print("Performing device identification...")
         
         device_info = {
             'ip_address': self.config.target_ip,
@@ -41,28 +43,34 @@ class DeviceIdentifier:
         
         # Run multiple identification methods in parallel
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = []
+            futures = {}
             
             # Network fingerprinting
-            futures.append(executor.submit(self._identify_by_port_scan))
-            futures.append(executor.submit(self._identify_by_mac_address))
-            futures.append(executor.submit(self._identify_by_ttl))
+            futures[executor.submit(self._identify_by_port_scan)] = 'port_scan'
+            futures[executor.submit(self._identify_by_mac_address)] = 'mac_address'
+            futures[executor.submit(self._identify_by_ttl)] = 'ttl'
             
             # Service fingerprinting
-            futures.append(executor.submit(self._identify_by_http_banner))
-            futures.append(executor.submit(self._identify_by_ssh_banner))
-            futures.append(executor.submit(self._identify_by_telnet_banner))
+            futures[executor.submit(self._identify_by_http_banner)] = 'http_banner'
+            futures[executor.submit(self._identify_by_ssh_banner)] = 'ssh_banner'
+            futures[executor.submit(self._identify_by_telnet_banner)] = 'telnet_banner'
             
             # Android-specific checks
-            futures.append(executor.submit(self._identify_by_adb))
+            futures[executor.submit(self._identify_by_adb)] = 'adb'
             
             for future in as_completed(futures):
+                method_name = futures[future]
                 try:
                     result = future.result()
                     if result:
                         self._merge_device_info(device_info, result)
+                        if self.debug:
+                            print(f"  [OK] {method_name}: {result}")
+                    else:
+                        if self.debug:
+                            print(f"  [--] {method_name}: no data")
                 except Exception as e:
-                    print(f"Identification method failed: {str(e)}")
+                    print(f"  [FAIL] {method_name}: {str(e)}")
         
         # Final classification
         self._classify_device(device_info)
@@ -164,12 +172,8 @@ class DeviceIdentifier:
         info = {}
         
         try:
-            # Build URL properly with port
-            http_url = f"{self.config.target_ip}"
-            if ':' not in http_url:
-                http_url += ":80"
-            
-            response = self.http_connector.get(f"/{http_url}", timeout=self.config.timeout)
+            # Simple HTTP GET request to root path
+            response = self.http_connector.get("/", timeout=self.config.timeout)
             
             if response is None:
                 return info

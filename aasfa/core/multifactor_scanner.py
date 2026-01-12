@@ -8,6 +8,7 @@ import threading
 import json
 import os
 import subprocess
+import sys
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -709,11 +710,12 @@ class VectorScheduler:
             if count > 0:
                 vuln_summary.append(f"{sev}: {count}")
         
-        vuln_str = " | ".join(vuln_summary) if vuln_summary else "No issues found"
+        vuln_str = " | ".join(vuln_summary) if vuln_summary else "No issues"
         
-        # Print progress line
-        sys.stdout.write(f'\r\033[K[{bar}] {percentage:.1f}% ({completed}/{total}) | '
-                        f'ETA: {eta_str} | {vuln_str}')
+        # Print progress line with clear line prefix
+        progress_line = f'[{bar}] {percentage:.1f}% ({completed}/{total}) | ETA: {eta_str} | {vuln_str}'
+        # Clear any leftover characters from previous line
+        sys.stdout.write(f'\r\033[K{progress_line}')
         sys.stdout.flush()
 
     def execute_all(self, aggregator: ResultAggregator) -> ResultAggregator:
