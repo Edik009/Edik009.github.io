@@ -8,6 +8,10 @@ from typing import Dict, Any, Optional, List
 from ..utils.logger import get_logger
 
 
+# Module-level flag to show baseline warning only once
+_baseline_warning_shown = False
+
+
 class BaselineManager:
     """Менеджер baseline database для fingerprinting и comparison"""
 
@@ -19,13 +23,17 @@ class BaselineManager:
 
     def _load_baseline(self):
         """Загрузка baseline database"""
+        global _baseline_warning_shown
+        
         try:
             if os.path.exists(self.baseline_path):
                 with open(self.baseline_path, 'r', encoding='utf-8') as f:
                     self._cache = json.load(f)
                 self.logger.debug(f"Loaded baseline database: {self.baseline_path}")
             else:
-                self.logger.warning(f"Baseline file not found: {self.baseline_path}")
+                if not _baseline_warning_shown:
+                    self.logger.warning(f"Baseline file not found: {self.baseline_path}")
+                    _baseline_warning_shown = True
                 self._cache = {"baseline": {}, "patterns": {}}
         except Exception as e:
             self.logger.error(f"Failed to load baseline: {e}")
