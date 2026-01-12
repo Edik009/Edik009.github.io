@@ -129,6 +129,26 @@ class ScannerEngine:
     def _load_check_module(self, check_function: str):
         """Динамическая загрузка функции проверки"""
         try:
+            # NEW: Network Layer checks (vectors 152, 155, 156, 160, 2005, 2506, 4903-4908, 5102)
+            network_layer_module = importlib.import_module("aasfa.checks.network_layer_checks")
+            if hasattr(network_layer_module, check_function):
+                return getattr(network_layer_module, check_function)
+            
+            # NEW: Crypto Advanced checks (vectors 4800, 4801, 4809, 4905-4907)
+            crypto_advanced_module = importlib.import_module("aasfa.checks.crypto_advanced_checks")
+            if hasattr(crypto_advanced_module, check_function):
+                return getattr(crypto_advanced_module, check_function)
+            
+            # NEW: Android Advanced Security checks (vectors 2100, 2101, 2106, 2109, 2110, 2115, 3301, 3305, 3318, 3319)
+            android_security_module = importlib.import_module("aasfa.checks.android_advanced_security_checks")
+            if hasattr(android_security_module, check_function):
+                return getattr(android_security_module, check_function)
+            
+            # NEW: Container/Cloud checks (vectors 3602, 3603, 3604, 2801, 2857, 4304)
+            container_cloud_module = importlib.import_module("aasfa.checks.container_cloud_checks")
+            if hasattr(container_cloud_module, check_function):
+                return getattr(container_cloud_module, check_function)
+            
             # NEW: Android Ultra Advanced checks (vectors 4000-4999)
             android_ultra_module = importlib.import_module("aasfa.checks.android_ultra_advanced_checks")
             if hasattr(android_ultra_module, check_function):
