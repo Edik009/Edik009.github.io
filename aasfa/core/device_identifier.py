@@ -164,8 +164,16 @@ class DeviceIdentifier:
         info = {}
         
         try:
-            response = self.http_connector.get(f"http://{self.config.target_ip}", timeout=self.config.timeout)
+            # Build URL properly with port
+            http_url = f"{self.config.target_ip}"
+            if ':' not in http_url:
+                http_url += ":80"
             
+            response = self.http_connector.get(f"/{http_url}", timeout=self.config.timeout)
+            
+            if response is None:
+                return info
+                
             # Check Server header
             server = response.headers.get('Server', '')
             if server:

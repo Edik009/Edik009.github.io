@@ -640,6 +640,7 @@ class VectorScheduler:
         self.registry = VectorRegistry()
         self.scanner_engine = ScannerEngine(config)
         self.vectors = []
+        self.vulnerability_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
         self._load_vectors_from_registry()
 
     def _load_vectors_from_registry(self):
@@ -653,7 +654,10 @@ class VectorScheduler:
         # Store vectors for execution
         self.vectors = filtered_vectors
 
-        print(f"Loaded {len(self.vectors)} vectors from VectorRegistry for execution")
+        print(f"📊 Loaded {len(self.vectors)} vectors from VectorRegistry for execution")
+        print(f"   └─ Total available vectors: {len(all_vectors)}")
+        print(f"   └─ Filtered by config: {len(filtered_vectors)}")
+        print()
 
     def _create_vector_execution_wrapper(self, vector):
         """Create a wrapper function to execute a vector's check functions"""
@@ -661,6 +665,13 @@ class VectorScheduler:
             try:
                 # Use ScannerEngine to execute the vector
                 result = self.scanner_engine._execute_check(vector)
+                
+                # Update vulnerability counts
+                if result and result.vulnerable:
+                    severity = result.severity
+                    if severity in self.vulnerability_counts:
+                        self.vulnerability_counts[severity] += 1
+                
                 return result
             except Exception as e:
                 # Return error result if execution fails
@@ -677,37 +688,75 @@ class VectorScheduler:
 
         return execute_vector
 
+    def _print_progress_bar(self, completed, total, start_time):
+        """Print formatted progress bar with vulnerability counts"""
+        # Calculate progress
+        percentage = (completed / total) * 100 if total > 0 else 0
+        filled_length = int(50 * completed // total) if total > 0 else 0
+        bar = '█' * filled_length + '░' * (50 - filled_length)
+        
+        # Calculate elapsed time and ETA
+        elapsed = time.time() - start_time
+        if completed > 0:
+            eta = (elapsed / completed) * (total - completed)
+            eta_str = f"{eta:.1f}s"
+        else:
+            eta_str = "N/A"
+        
+        # Build vulnerability counts string
+        vuln_summary = []
+        for sev, count in self.vulnerability_counts.items():
+            if count > 0:
+                vuln_summary.append(f"{sev}: {count}")
+        
+        vuln_str = " | ".join(vuln_summary) if vuln_summary else "No issues found"
+        
+        # Print progress line
+        sys.stdout.write(f'\r\033[K[{bar}] {percentage:.1f}% ({completed}/{total}) | '
+                        f'ETA: {eta_str} | {vuln_str}')
+        sys.stdout.flush()
+
     def execute_all(self, aggregator: ResultAggregator) -> ResultAggregator:
-        """Execute all vectors from VectorRegistry"""
+        """Execute all vectors from VectorRegistry with enhanced progress display"""
         if not self.vectors:
-            print("No vectors to execute")
+            print("⚠️  No vectors to execute")
             return aggregator
 
-        print(f"Starting multifactor scan of {len(self.vectors)} vectors from VectorRegistry...\n")
+        print(f"🚀 Starting multifactor scan of {len(self.vectors)} vectors...")
+        print(f"   └─ Threads: {self.config.threads}")
+        print(f"   └─ Timeout: {self.config.timeout}s per check")
+        print(f"   └─ Mode: {self.config.mode.upper()}")
+        print()
 
+        start_time = time.time()
+        completed = 0
+        failed = 0
+        
         with ThreadPoolExecutor(max_workers=self.config.threads) as executor:
             future_to_vector = {}
 
-            # Create execution wrappers for all vectors
+            # Submit all vectors for execution
             for vector in self.vectors:
                 execution_wrapper = self._create_vector_execution_wrapper(vector)
                 future = executor.submit(execution_wrapper)
                 future_to_vector[future] = vector
 
-            completed = 0
+            # Process completed futures
             for future in as_completed(future_to_vector):
                 vector = future_to_vector[future]
                 try:
                     result = future.result(timeout=self.config.thread_timeout)
                     aggregator.add_vector_result(result)
-
-                    completed += 1
-                    print(f"Progress: {completed}/{len(self.vectors)} - VECTOR_{vector.id:03d} - {vector.name}", end='\r')
+                    
+                    # Show detailed result for vulnerable findings
+                    if result and result.vulnerable and result.severity != "INFO":
+                        print(f"\n\033[91m[!] VECTOR_{result.vector_id:03d}: {result.vector_name}")
+                        print(f"    Confidence: {result.confidence:.1f}% | Severity: {result.severity}")
+                        print(f"    Details: {result.details[0] if result.details else 'No details'}")
+                        print("\033[0m")
 
                 except Exception as e:
-                    completed += 1
-                    print(f"Error scanning VECTOR_{vector.id:03d}: {str(e)}")
-
+                    failed += 1
                     # Add error result to aggregator
                     error_result = VectorResult(
                         vector_id=vector.id,
@@ -721,5 +770,18 @@ class VectorScheduler:
                     )
                     aggregator.add_vector_result(error_result)
 
-        print("\nScan completed!\n")
+                completed += 1
+                self._print_progress_bar(completed, len(self.vectors), start_time)
+
+        # Final summary
+        elapsed = time.time() - start_time
+        print(f"\n\n✅ Scan completed in {elapsed:.1f} seconds!")
+        print(f"   └─ Vectors scanned: {completed}")
+        print(f"   └─ Failed checks: {failed}")
+        print(f"\n📊 Vulnerability Summary:")
+        for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+            count = self.vulnerability_counts[severity]
+            if count > 0:
+                print(f"   └─ {severity}: {count} findings")
+        
         return aggregator
